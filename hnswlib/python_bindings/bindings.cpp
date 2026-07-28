@@ -202,7 +202,6 @@ class Index {
     }
 
 
-    // 결과와 메트릭을 함께 담는 구조체
     struct SearchBatchResult {
         py::object paths;
         size_t total_dist_count;
@@ -400,7 +399,6 @@ class Index {
             } else {
                 std::vector<float> norm_array(num_threads * dim);
                 ParallelFor(start, rows, num_threads, [&](size_t row, size_t threadId) {
-                    // normalize vector:
                     size_t start_idx = threadId * dim;
                     normalize_vector((float*)items.data(row), (norm_array.data() + start_idx));
 
@@ -412,232 +410,6 @@ class Index {
         }
     }
 
-	py::object getLayer0NeighborsWithDistances() {
-    	// 1. 내부 ID 기반의 인접 리스트를 가져옴
-    	auto nodes_internal = appr_alg->getLayer0NeighborsWithDistances();
-
-    	// 2. 외부 반환을 위한 Label 기반 맵 선언
-    	std::unordered_map<hnswlib::labeltype, std::vector<std::pair<hnswlib::labeltype, float>>> adj_labels;
-    	adj_labels.reserve(nodes_internal.size());
-
-	    for (auto const& [u_internal, neighbors] : nodes_internal) {
-        	// Source 노드 변환
-        	hnswlib::labeltype u_label = appr_alg->getExternalLabel(u_internal);
-
-        	std::vector<std::pair<hnswlib::labeltype, float>> nbrs_labels;
-        	nbrs_labels.reserve(neighbors.size());
-
-        	for (auto const& [v_internal, dist] : neighbors) {
-            	// Target 노드 변환
-            	nbrs_labels.push_back({appr_alg->getExternalLabel(v_internal), dist});
-        	}
-        	adj_labels[u_label] = std::move(nbrs_labels);
-    	}
-    	return py::cast(adj_labels);
-	}
-
-	std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py::array_t<float>>
-	getLayer0EdgesParallel() {
-    	size_t num_nodes = appr_alg->cur_element_count;
-
-    	// 1. 각 노드의 엣지 개수를 파악하여 오프셋 계산 (이 부분은 가벼움)
-    	std::vector<size_t> offsets(num_nodes + 1, 0);
-    	for (size_t i = 0; i < num_nodes; ++i) {
-        	if (appr_alg->isMarkedDeleted(i)) {
-            	offsets[i + 1] = offsets[i];
-            	continue;
-        	}
-        	offsets[i + 1] = offsets[i] + appr_alg->getListCount(appr_alg->get_linklist0(i));
-    	}
-    	size_t total_edges = offsets[num_nodes];
-
-    	// 2. 결과 배열 할당
-    	py::array_t<hnswlib::labeltype> sources(total_edges);
-    	py::array_t<hnswlib::labeltype> targets(total_edges);
-    	py::array_t<float> distances(total_edges);
-
-    	auto src_ptr = sources.mutable_data();
-    	auto tgt_ptr = targets.mutable_data();
-    	auto dist_ptr = distances.mutable_data();
-
-    	// 3. 진정한 병렬 처리: 거리 계산과 배열 채우기를 동시에 수행
-    	{
-        	py::gil_scoped_release l;
-        	ParallelFor(0, num_nodes, num_threads_default, [&](size_t u, size_t threadId) {
-            	if (appr_alg->isMarkedDeleted(u)) return;
-
-            	hnswlib::labeltype u_label = appr_alg->getExternalLabel(u);
-            	char* u_data = appr_alg->getDataByInternalId(u);
-
-            	hnswlib::linklistsizeint* ll = appr_alg->get_linklist0(u);
-            	size_t sz = appr_alg->getListCount(ll);
-            	hnswlib::tableint* neighbors = (hnswlib::tableint*)(ll + 1);
-
-            	size_t start_idx = offsets[u];
-            	for (size_t j = 0; j < sz; j++) {
-                	hnswlib::tableint v = neighbors[j];
-                	size_t write_pos = start_idx + j;
-
-                	src_ptr[write_pos] = u_label;
-                	tgt_ptr[write_pos] = appr_alg->getExternalLabel(v);
-
-                	// 거리 계산을 여기서 병렬로 수행!
-                	dist_ptr[write_pos] = (float)appr_alg->fstdistfunc_(
-                    	u_data,
-                    	appr_alg->getDataByInternalId(v),
-                    	appr_alg->dist_func_param_
-                	);
-            	}
-        	});
-    	}
-
-    	return std::make_tuple(sources, targets, distances);
-	}
-
-std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py::array_t<float>>
-	getLayerEdgesParallel(int level) {
-    	// 인덱스가 비어있거나 level이 최대 레벨을 초과한 경우 빈 배열 반환
-    	if (level < 0 || appr_alg->cur_element_count == 0 || level > appr_alg->maxlevel_) {
-        	return std::make_tuple(
-            	py::array_t<hnswlib::labeltype>(0),
-            	py::array_t<hnswlib::labeltype>(0),
-            	py::array_t<float>(0)
-        	);
-    	}
-
-    	size_t num_nodes = appr_alg->cur_element_count;
-
-    	// 1. 해당 level에 존재하는 노드들의 엣지 개수 파악 및 오프셋 계산
-    	std::vector<size_t> offsets(num_nodes + 1, 0);
-    	for (size_t i = 0; i < num_nodes; ++i) {
-        	if (appr_alg->isMarkedDeleted(i) || level > appr_alg->element_levels_[i]) {
-            	offsets[i + 1] = offsets[i];
-            	continue;
-        	}
-        	offsets[i + 1] = offsets[i] + appr_alg->getListCount(appr_alg->get_linklist_at_level(i, level));
-    	}
-    	size_t total_edges = offsets[num_nodes];
-
-    	// 2. Numpy 배열 할당
-    	py::array_t<hnswlib::labeltype> sources(total_edges);
-    	py::array_t<hnswlib::labeltype> targets(total_edges);
-    	py::array_t<float> distances(total_edges);
-
-    	auto src_ptr = sources.mutable_data();
-    	auto tgt_ptr = targets.mutable_data();
-    	auto dist_ptr = distances.mutable_data();
-
-    	// 3. 병렬 처리: 거리 계산 및 배열 채우기
-    	{
-        	py::gil_scoped_release l;
-        	ParallelFor(0, num_nodes, num_threads_default, [&](size_t u, size_t threadId) {
-            	if (appr_alg->isMarkedDeleted(u) || level > appr_alg->element_levels_[u]) return;
-
-            	hnswlib::labeltype u_label = appr_alg->getExternalLabel(u);
-            	char* u_data = appr_alg->getDataByInternalId(u);
-
-            	hnswlib::linklistsizeint* ll = appr_alg->get_linklist_at_level(u, level);
-            	size_t sz = appr_alg->getListCount(ll);
-            	hnswlib::tableint* neighbors = (hnswlib::tableint*)(ll + 1);
-
-            	size_t start_idx = offsets[u];
-            	for (size_t j = 0; j < sz; j++) {
-                	hnswlib::tableint v = neighbors[j];
-                	size_t write_pos = start_idx + j;
-
-                	src_ptr[write_pos] = u_label;
-                	tgt_ptr[write_pos] = appr_alg->getExternalLabel(v);
-
-                	dist_ptr[write_pos] = (float)appr_alg->fstdistfunc_(
-                    	u_data,
-                    	appr_alg->getDataByInternalId(v),
-                    	appr_alg->dist_func_param_
-                	);
-            	}
-        	});
-    	}
-
-    	return std::make_tuple(sources, targets, distances);
-	}
-
-    void forcedInsertLayer0Edge(
-        size_t from,
-        size_t to,
-        bool bidirectional = false
-    ) {
-        appr_alg->forcedInsertLayer0Edge(from, to, bidirectional);
-    }
-
-    // 기존 forcedInsertLayer0Edge 아래에 추가
-
-    /*
-     * [최적화] 배치 병렬 엣지 삽입
-     * Python overhead를 제거하고 C++ 레벨에서 멀티스레드로 엣지를 연결
-     */
-    void batchInsertLayer0Edges(
-        py::object sources_obj,
-        py::object targets_obj,
-        int num_threads = -1
-    ) {
-        // 1. Python 객체를 C++ Vector로 변환 (Numpy 호환)
-        py::array_t<size_t, py::array::c_style | py::array::forcecast> sources_arr(sources_obj);
-        py::array_t<size_t, py::array::c_style | py::array::forcecast> targets_arr(targets_obj);
-
-        auto sources_req = sources_arr.request();
-        auto targets_req = targets_arr.request();
-
-        if (sources_req.size != targets_req.size) {
-            throw std::runtime_error("Sources and Targets must have the same length");
-        }
-
-        size_t count = sources_req.size;
-        size_t* sources_ptr = (size_t*)sources_req.ptr;
-        size_t* targets_ptr = (size_t*)targets_req.ptr;
-
-        // 2. 스레드 수 설정
-        if (num_threads <= 0) num_threads = num_threads_default;
-
-        // 3. GIL 해제 (병렬 처리를 위해 필수)
-        py::gil_scoped_release l;
-
-        // 4. ParallelFor를 사용하여 병렬 처리
-        ParallelFor(0, count, num_threads, [&](size_t i, size_t threadId) {
-            size_t u_label = sources_ptr[i]; // 외부 라벨
-            size_t v_label = targets_ptr[i]; // 외부 라벨
-
-            hnswlib::tableint u_internal, v_internal;
-
-            // 1. label_lookup_을 통해 외부 라벨을 내부 ID로 변환
-            {
-                std::unique_lock<std::mutex> lock(appr_alg->label_lookup_lock); //
-                auto it_u = appr_alg->label_lookup_.find(u_label);
-                auto it_v = appr_alg->label_lookup_.find(v_label);
-
-                // 라벨이 존재하지 않는 경우 스킵
-                if (it_u == appr_alg->label_lookup_.end() || it_v == appr_alg->label_lookup_.end()) {
-                    return;
-                }
-
-                u_internal = it_u->second;
-                v_internal = it_v->second;
-            }
-
-            // 2. 변환된 내부 ID(tableint)를 사용하여 에지 삽입
-            appr_alg->forcedInsertLayer0EdgeWithLock(u_internal, v_internal); //
-        });
-    }
-
-    // [API 1] 기존 API: 하위 호환성 유지 (항상 List[List[Label]]만 반환)
-    py::object searchLayer0PathBatch(
-        py::object input,
-        size_t ef,
-        int num_threads = -1
-    ) {
-        SearchBatchResult res = _searchLayer0PathBatchInternal(input, 10, ef, num_threads);
-        return res.paths;
-    }
-
-    // [API 2] 신규 API: 거리 계산 횟수 포함 (Tuple[List, int] 반환)
     py::tuple searchLayer0PathBatchWithMetrics(
         py::object input,
         size_t k,
@@ -645,18 +417,7 @@ std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py:
         int num_threads = -1
     ) {
         SearchBatchResult res = _searchLayer0PathBatchInternal(input, k, ef, num_threads);
-        // Python에서 (results, total_dist_count, closest_dists) 형태의 튜플로 받게 됨
         return py::make_tuple(res.paths, res.total_dist_count, res.closest_dists);
-    }
-
-    py::object searchLayer0PathHideNodeBatch(
-        py::object input,
-        size_t ef,
-        py::object hide_labels,
-        int num_threads = -1
-    ) {
-        SearchBatchResult res = _searchLayer0PathBatchInternal(input, 10, ef, num_threads, hide_labels);
-        return res.paths;
     }
 
     py::tuple searchLayer0PathHideNodeBatchWithMetrics(
@@ -696,7 +457,7 @@ std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py:
                 norm_array.resize(num_threads * features);
             }
 
-            py::gil_scoped_release l; // GIL 해제: 이제부터 Python 객체 조작 금지
+            py::gil_scoped_release l;
             ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
                 const float* query_ptr = (const float*)items.data(row);
                 if (normalize) {
@@ -705,16 +466,14 @@ std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py:
                     query_ptr = norm_array.data() + start_idx;
                 }
 
-                // C++ 구조체로 결과 수집
                 auto [steps, count, closest_dist] =
                     appr_alg->searchKnnWithLayer0Trace(query_ptr, ef, k, hidden_internal_ids[row]);
                 raw_results[row] = std::move(steps);
                 dist_counts[row] = count;
                 closest_dists[row] = closest_dist;
             });
-        } // gil_scoped_release 소멸 시 GIL 자동 재획득
+        }
 
-        // 2단계: 메인 스레드에서 Python 객체로 변환 (GIL 확보 상태)
         std::vector<std::vector<py::dict>> py_results(rows);
         for (size_t i = 0; i < rows; ++i) {
             std::vector<py::dict> py_steps;
@@ -736,14 +495,7 @@ std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py:
         };
     }
 
-    // Efficient offline-calibration summary: runs the same layer-0 trace search
-    // as searchLayer0PathHideNodeBatchWithMetrics, but aggregates the classify-
-    // window smoothed-CHR mean entirely in C++ (no per-step py::dict marshaling).
-    // Mirrors Faiss IndexHNSW::search_layer0_chr_summary in name, signature and
-    // return keys so the shared calibrator can use one API across both backends.
-    // The aggregation is a line-for-line port of the calibrator's former Python
-    // trace loop, so calibrated thresholds are unchanged (values identical up to
-    // float rounding).
+    // Keep CHR aggregation aligned with the shared Python/FAISS calibrator.
     py::dict searchLayer0ChrSummary(
         py::object input,
         size_t k,
@@ -800,16 +552,13 @@ std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py:
                 auto [steps, count, closest_dist] =
                     appr_alg->searchKnnWithLayer0Trace(query_ptr, ef, k, hidden_internal_ids[row]);
 
-                // Aggregate the classify-window smoothed-CHR mean in double (same
-                // precision as the former Python trace loop, which read float32
-                // step fields as Python doubles).
                 double ema = std::numeric_limits<double>::quiet_NaN();
                 int observed_full_pop = 0;
                 int window_obs = 0;
                 double window_sum = 0.0;
                 for (const auto& s : steps) {
                     if (s.result_set_size_after < ef) {
-                        continue;  // not a full pop yet
+                        continue;
                     }
                     observed_full_pop += 1;
 
@@ -871,13 +620,11 @@ std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py:
         bool enable_stop = true,
         size_t stop_step = 0,
         int num_threads = -1,
-        // [수정 1] Vanilla와 동일하게 filter 파라미터 추가
         const std::function<bool(hnswlib::labeltype)>& filter = nullptr,
         float early_stop_ratio = 0.6f,
         float super_easy_gamma_ratio = std::numeric_limits<float>::quiet_NaN(),
         float mid_easy_upper_gamma_ratio = std::numeric_limits<float>::quiet_NaN()
     ) {
-        // [수정 2] 빈 인덱스 접근 시 Segfault 방지
         if (appr_alg->cur_element_count == 0) {
             throw std::runtime_error("Index is empty. Cannot perform search.");
         }
@@ -903,7 +650,6 @@ std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py:
                 norm_array.resize((size_t)num_threads * features);
             }
 
-            // 필터 객체 생성
             CustomFilterFunctor idFilter(filter);
             CustomFilterFunctor* p_idFilter = filter ? &idFilter : nullptr;
 
@@ -931,7 +677,6 @@ std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py:
                 data_numpy_reduced_steps[row] = adaptive_output.stats.reduced_steps;
                 total_stop_count.fetch_add(adaptive_output.stats.stop_count, std::memory_order_relaxed);
 
-                // [수정 3] 결과셋이 부족할 때 쓰레기값 반환 방지 (Vanilla와 동일한 에러 처리)
                 if (result.size() != k) {
                     throw std::runtime_error("Cannot return the results in a contiguous 2D array. Probably ef or M is too small");
                 }
@@ -1373,8 +1118,6 @@ std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py:
         );
     }
 
-    // Adaptive-light intentionally returns only (labels, distances).
-    // It does not expose reduced-step or stop-count statistics.
     py::object knnQueryAdaptiveLight(
         py::object input,
         size_t k = 1,
@@ -1415,7 +1158,6 @@ std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py:
             CustomFilterFunctor idFilter(filter);
             CustomFilterFunctor* p_idFilter = filter ? &idFilter : nullptr;
 
-            // [최적화] Loop Unswitching: 핫 루프 내부의 분기문을 밖으로 빼냄
             if (normalize == false) {
                 ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
                     auto result = appr_alg->searchKnnAdaptiveLight(
@@ -1477,7 +1219,6 @@ std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py:
             }
         }
 
-        // 작성하신 안전한 메모리 해제 유지 (이게 Baseline보다 낫습니다)
         py::capsule free_when_done_l(data_numpy_l, [](void* f) { delete[] (hnswlib::labeltype*)f; });
         py::capsule free_when_done_d(data_numpy_d, [](void* f) { delete[] (dist_t*)f; });
 
@@ -1607,12 +1348,11 @@ std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py:
         if (num_threads <= 0) num_threads = num_threads_default;
 
         size_t n = appr_alg->cur_element_count;
-        appr_alg->node_lid_.assign(appr_alg->max_elements_, 0.0f); // 공간 확보
+        appr_alg->node_lid_.assign(appr_alg->max_elements_, 0.0f);
 
         {
-            py::gil_scoped_release l; // 검색 연산을 위해 GIL 해제
+            py::gil_scoped_release l;
             ParallelFor(0, n, num_threads, [&](size_t i, size_t threadId) {
-                // 삭제된 노드가 아니라면 LID 계산 수행
                 if (!appr_alg->isMarkedDeleted((hnswlib::tableint)i)) {
                     appr_alg->calcNodeLidInternal((hnswlib::tableint)i, k_lid);
                 }
@@ -1681,7 +1421,6 @@ std::tuple<py::array_t<hnswlib::labeltype>, py::array_t<hnswlib::labeltype>, py:
     if (!appr_alg || appr_alg->node_lid_.empty()) {
         return py::array_t<float>(0);
     }
-    // node_lid_ 벡터를 NumPy 배열로 복사하여 반환
     return py::array_t<float>(
         { appr_alg->node_lid_.size() },
         { sizeof(float) },
@@ -2382,7 +2121,6 @@ PYBIND11_PLUGIN(hnswlib) {
 
         py::class_<Index<float>>(m, "Index")
         .def(py::init(&Index<float>::createFromParams), py::arg("params"))
-           /* WARNING: Index::createFromIndex is not thread-safe with Index::addItems */
         .def(py::init(&Index<float>::createFromIndex), py::arg("index"))
         .def(py::init<const std::string &, const int>(), py::arg("space"), py::arg("dim"))
         .def("init_index",
@@ -2544,10 +2282,6 @@ Legacy experiment scripts may still call `knn_query_adaptive_light_paper_bucket`
             py::arg("classify_end") = 16,
             py::arg("chr_ema_decay") = 0.8f
         )
-        .def("get_layer_edges_parallel",
-            &Index<float>::getLayerEdgesParallel,
-            py::arg("level")
-        )
         .def("get_lids", &Index<float>::getLids)
         .def("calc_lids_internal", &Index<float>::calcLidsInternal,
             py::arg("k_lid"),
@@ -2568,102 +2302,6 @@ Legacy experiment scripts may still call `knn_query_adaptive_light_paper_bucket`
             py::arg("ids") = py::none(),
             py::arg("num_threads") = -1,
             py::arg("replace_deleted") = false)
-        .def("get_layer0_neighbors_with_distances",
-            &Index<float>::getLayer0NeighborsWithDistances
-        )
-        .def("get_layer0_edges_parallel",
-            &Index<float>::getLayer0EdgesParallel
-        )
-        .def("forced_insert_layer0_edge",
-            &Index<float>::forcedInsertLayer0Edge,
-            py::arg("from"),
-            py::arg("to"),
-            py::arg("bidirectional") = false
-        )
-    .def("search_layer0_path",
-            [](Index<float>& index, py::array_t<float> query, size_t ef) {
-                auto buf = query.request();
-                float* query_data = (float*)buf.ptr;
-
-                if (index.normalize) {
-                    std::vector<float> normalized_query(index.dim);
-                    index.normalize_vector(query_data, normalized_query.data());
-                    query_data = normalized_query.data();
-                }
-
-                // C++ 결과 획득
-                auto [steps, count, closest_dist] = index.appr_alg->searchKnnWithLayer0Trace(query_data, ef, 10);
-                (void)count;
-                (void)closest_dist;
-
-                // Python Dict 리스트로 변환 (GIL이 잡혀있는 상태이므로 안전함)
-                std::vector<py::dict> py_steps;
-                for (auto& s : steps) {
-                    py::dict d;
-                    float node_internal_lid = std::numeric_limits<float>::quiet_NaN();
-                    if (s.node_id < index.appr_alg->node_lid_.size()) {
-                        node_internal_lid = index.appr_alg->node_lid_[s.node_id];
-                    }
-                    d["node_label"] = index.appr_alg->getExternalLabel(s.node_id);
-                    d["node_internal_lid"] = node_internal_lid;
-                    d["rs_size"] = s.result_set_size;
-                    d["rs_size_after"] = s.result_set_size_after;
-                    d["is_full_pop_after"] = s.is_full_pop_after;
-                    d["full_pop_count_after"] = s.full_pop_count_after;
-                    d["popped_degree"] = s.popped_degree;
-                    d["unvisited_neighbor_count"] = s.unvisited_neighbor_count;
-                    d["accepted_neighbor_count"] = s.accepted_neighbor_count;
-                    d["runtime_accepted_rate"] = s.runtime_accepted_rate;
-                    d["runtime_chr"] = s.runtime_chr;
-                    d["runtime_smoothed_chr"] = s.runtime_smoothed_chr;
-                    d["runtime_classify_chr_mean"] = s.runtime_classify_chr_mean;
-                    d["runtime_is_easy_query"] = s.runtime_is_easy_query;
-                    d["runtime_is_super_easy_query"] = s.runtime_is_super_easy_query;
-                    d["internal_dist"] = s.internal_dist;
-                    d["popped_query_dist"] = s.popped_query_dist;
-                    d["furthest_dist"] = s.furthest_dist;
-                    d["best_dist"] = s.best_dist;
-                    d["top_k_dist"] = s.top_k_dist;
-                    d["ef_half_dist"] = s.ef_half_dist;
-                    d["ef_quarter_dist"] = s.ef_quarter_dist;
-                    d["sqrt_ef_dist"] = s.sqrt_ef_dist;
-                    d["shadow_64_dist"] = s.shadow_64_dist;
-                    d["shadow_128_dist"] = s.shadow_128_dist;
-                    d["shadow_256_dist"] = s.shadow_256_dist;
-                    d["shadow_512_dist"] = s.shadow_512_dist;
-                    d["top_2k_dist"] = s.top_2k_dist;
-                    d["top_3k_dist"] = s.top_3k_dist;
-                    std::vector<hnswlib::labeltype> top_k_labels;
-                    top_k_labels.reserve(s.top_k_node_ids.size());
-                    for (const auto internal_id : s.top_k_node_ids) {
-                        top_k_labels.push_back(index.appr_alg->getExternalLabel(internal_id));
-                    }
-                    d["top_k_labels"] = top_k_labels;
-                    d["furthest_vec"] = py::array_t<float>(s.furthest_vec.size(), s.furthest_vec.data());
-                    py_steps.push_back(d);
-                }
-                return py_steps; // List[Dict] 반환
-            }
-        )
-        .def("batch_insert_layer0_edges",
-            &Index<float>::batchInsertLayer0Edges,
-            py::arg("sources"),
-            py::arg("targets"),
-            py::arg("num_threads") = -1
-        )
-        .def("search_layer0_path_batch",
-            &Index<float>::searchLayer0PathBatch,
-            py::arg("data"),
-            py::arg("ef"),
-            py::arg("num_threads") = -1
-        )
-        .def("search_layer0_path_hide_node_batch",
-            &Index<float>::searchLayer0PathHideNodeBatch,
-            py::arg("data"),
-            py::arg("ef"),
-            py::arg("hide_labels"),
-            py::arg("num_threads") = -1
-        )
         .def("search_layer0_path_with_dist_metrics_batch",
             &Index<float>::searchLayer0PathBatchWithMetrics,
             py::arg("data"),

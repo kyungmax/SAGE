@@ -1,13 +1,5 @@
 #pragma once
 
-#ifdef _OPENMP
-#include <omp.h>
-#else
-#define omp_get_max_threads() 1
-#define omp_get_num_threads() 1
-#define omp_get_thread_num() 0
-#endif
-
 #include "visited_list_pool.h"
 #include "hnswlib.h"
 #include <atomic>
@@ -33,10 +25,10 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     static const unsigned char DELETE_MARK = 0x01;
 
     size_t max_elements_{0};
-    mutable std::atomic<size_t> cur_element_count{0};  // current number of elements
+    mutable std::atomic<size_t> cur_element_count{0};
     size_t size_data_per_element_{0};
     size_t size_links_per_element_{0};
-    mutable std::atomic<size_t> num_deleted_{0};  // number of deleted elements
+    mutable std::atomic<size_t> num_deleted_{0};
     size_t M_{0};
     size_t maxM_{0};
     size_t maxM0_{0};
@@ -61,14 +53,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
     char *data_level0_memory_{nullptr};
     char **linkLists_{nullptr};
-    std::vector<int> element_levels_;  // keeps level of each element
+    std::vector<int> element_levels_;
 
     size_t data_size_{0};
 
     DISTFUNC<dist_t> fstdistfunc_;
     void *dist_func_param_{nullptr};
 
-    mutable std::mutex label_lookup_lock;  // lock for label_lookup_
+    mutable std::mutex label_lookup_lock;
     std::unordered_map<labeltype, tableint> label_lookup_;
 
     std::default_random_engine level_generator_;
@@ -77,12 +69,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     mutable std::atomic<long> metric_distance_computations{0};
     mutable std::atomic<long> metric_hops{0};
 
-    std::vector<float> node_lid_;  // node LID values
+    std::vector<float> node_lid_;
 
-    bool allow_replace_deleted_ = false;  // flag to replace deleted elements (marked as deleted) during insertions
+    bool allow_replace_deleted_ = false;
 
-    std::mutex deleted_elements_lock;  // lock for deleted_elements
-    std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
+    std::mutex deleted_elements_lock;
+    std::unordered_set<tableint> deleted_elements;
 
 
     HierarchicalNSW(SpaceInterface<dist_t> *s) {
@@ -131,15 +123,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         level_generator_.seed(random_seed);
         update_probability_generator_.seed(random_seed + 1);
 
-        // 각 노드마다 가지는 이웃 리스트의 크기
         size_links_level0_ = (maxM0_ + 100) * sizeof(tableint) + sizeof(linklistsizeint);
-        // 본인 + 이웃 크기인건가?
         size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype);
         offsetData_ = size_links_level0_;
         label_offset_ = size_links_level0_ + data_size_;
         offsetLevel0_ = 0;
 
-        // layer0의 최대 원소 개수 x 각 원소 당 데이터 크기만큼 메모리 할당
         data_level0_memory_ = (char *) malloc(max_elements_ * size_data_per_element_);
         if (data_level0_memory_ == nullptr)
             throw std::runtime_error("Not enough memory");
@@ -148,7 +137,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
         visited_list_pool_ = std::unique_ptr<VisitedListPool>(new VisitedListPool(1, max_elements));
 
-        // initializations for special treatment of the first node
         enterpoint_node_ = -1;
         maxlevel_ = -1;
 
@@ -187,8 +175,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     };
 
     struct AdaptiveSearchStats {
-        size_t reduced_steps = 0;  // max(ef_init - pop_count, 0) when early-stop fires
-        size_t stop_count = 0;     // 1 if early-stop fired, otherwise 0
+        size_t reduced_steps = 0;
+        size_t stop_count = 0;
     };
 
     struct AdaptiveSearchResult {
@@ -443,7 +431,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
 
     inline std::mutex& getLabelOpMutex(labeltype label) const {
-        // calculate hash
         size_t lock_id = label & (MAX_LABEL_OPERATION_LOCKS - 1);
         return label_op_locks_[lock_id];
     }
@@ -517,27 +504,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         return num_deleted_;
     }
 
-    /*
-     *  -------------------------- BEGIN --------------------------
-     * Custom Logic Implementation for HNSW repairing approach
-    */
-
-    // ===== Layer0 full adjacency with distances (UNSAFE, read-only) =====
-    // Returns: map[node_id] -> vector of (neighbor_id, distance)
-
-    // hnswalg.h 내 HierarchicalNSW 클래스 public 영역에 추가
     float calcNodeLidValueInternal(tableint internal_id, size_t k_lid) {
         if (k_lid < 2) return 0.0f;
 
-        // 1. 해당 노드의 벡터 데이터 가져오기
         void* query_data = getDataByInternalId(internal_id);
 
-        // 2. 내부 k-NN 검색 수행 (본인 포함 k_lid + 1개를 찾아야 함)
-        // searchBaseLayerST를 사용하여 효율적으로 검색
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>
             knn_res = searchBaseLayerST<true>(enterpoint_node_, query_data, std::max(ef_, k_lid + 1));
 
-        // 3. 거리 값 추출 및 정렬 (가까운 순)
         std::vector<float> distances;
         while (!knn_res.empty()) {
             distances.push_back((float)knn_res.top().first);
@@ -545,16 +519,13 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         }
         std::sort(distances.begin(), distances.end());
 
-        // 4. MLE LID 계산
-        // Formula: LID = - [ (1/k) * sum_{i=1}^{k-1} ln(d_i / d_k) ]^-1
+        // MLE LID: -k / sum(log(d_i / d_k)).
         float sum_log = 0.0f;
         float d_max = 0;
 
-        // d_0은 자기 자신(거리 0)일 것이므로 i=1부터 시작하여 실제 이웃들 계산
-        // d_max는 k_lid번째 이웃의 거리
         size_t actual_k = 0;
         for (size_t i = 1; i < distances.size() && actual_k < k_lid; ++i) {
-            if (distances[i] > 1e-9) { // 거리 0 제외
+            if (distances[i] > 1e-9) {
                 actual_k++;
                 d_max = distances[i];
             }
@@ -582,111 +553,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         node_lid_[internal_id] = calcNodeLidValueInternal(internal_id, k_lid);
     }
 
-    std::unordered_map<tableint, std::vector<std::pair<tableint, float>>>
-getLayer0NeighborsWithDistances() const {
-        std::unordered_map<tableint, std::vector<std::pair<tableint, float>>> adj;
-        adj.reserve(cur_element_count);
-
-        // 스레드별로 결과를 담을 임시 벡터 (Lock 경합 방지)
-        std::vector<std::unordered_map<tableint, std::vector<std::pair<tableint, float>>>> local_adjs(omp_get_max_threads());
-
-#pragma omp parallel
-        {
-            int tid = omp_get_thread_num();
-            local_adjs[tid].reserve(cur_element_count / omp_get_num_threads());
-
-#pragma omp for schedule(dynamic, 64)
-            for (int u_idx = 0; u_idx < (int)cur_element_count; u_idx++) {
-                tableint u = (tableint)u_idx;
-                if (isMarkedDeleted(u)) continue;
-
-                linklistsizeint* ll = get_linklist0(u);
-                size_t sz = getListCount(ll);
-                tableint* data = (tableint*)(ll + 1);
-
-                std::vector<std::pair<tableint, float>> nbrs;
-                nbrs.reserve(sz);
-
-                char* u_data = getDataByInternalId(u);
-
-                for (size_t i = 0; i < sz; i++) {
-                    tableint v = data[i];
-                    char* v_data = getDataByInternalId(v);
-                    // 무거운 거리 계산을 병렬로 수행
-                    float d = (float)fstdistfunc_(u_data, v_data, dist_func_param_);
-                    nbrs.emplace_back(v, d);
-                }
-
-                local_adjs[tid].emplace(u, std::move(nbrs));
-            }
-        }
-
-        // 각 스레드의 결과를 하나로 병합 (이 부분은 순차적이지만 매우 빠름)
-        for (auto& local_map : local_adjs) {
-            adj.insert(std::make_move_iterator(local_map.begin()),
-                       std::make_move_iterator(local_map.end()));
-        }
-
-        return adj;
-    }
-
-    // hnswalg.h (public, UNSAFE)
-    void forcedInsertLayer0Edge(
-        tableint from,
-        tableint to,
-        bool bidirectional = false
-    ) {
-        // layer 0 only
-        linklistsizeint* ll = get_linklist0(from);
-        size_t sz = getListCount(ll);
-        tableint* data = (tableint*)(ll + 1);
-
-        // 중복 방지
-        for (size_t i = 0; i < sz; i++) {
-            if (data[i] == to) return;
-        }
-
-        // ⚠️ no maxM0_ verification
-        data[sz] = to;
-        setListCount(ll, sz + 1);
-
-        if (bidirectional) {
-            forcedInsertLayer0Edge(to, from, false);
-        }
-    }
-
-    /*
-     * [최적화] Thread-safe 버전의 강제 엣지 삽입
-     * 기존 forcedInsertLayer0Edge에 Lock을 추가하여 병렬 처리가 가능하도록 함
-     */
-    void forcedInsertLayer0EdgeWithLock(
-        tableint from,
-        tableint to
-    ) {
-        // 1. 해당 노드(from)의 LinkList에 접근하기 위해 Lock 획득
-        std::unique_lock<std::mutex> lock(link_list_locks_[from]);
-
-        linklistsizeint* ll = get_linklist0(from);
-        unsigned short int sz = getListCount(ll);
-        tableint* data = (tableint*)(ll + 1);
-
-        // 2. 중복 체크 (이미 연결된 경우 스킵)
-        for (size_t i = 0; i < sz; i++) {
-            if (data[i] == to) return;
-        }
-
-        // 3. 엣지 추가 (메모리 버퍼 오버플로우 방지 체크 권장)
-        // 생성자에서 (maxM0_ + 100) 만큼 할당했으므로, 이 범위를 넘지 않도록 안전장치 추가
-        size_t allocated_size = maxM0_ + 100;
-        if (sz >= allocated_size) {
-            // 버퍼가 가득 찼다면 추가하지 않음 (혹은 에러 로그)
-            return;
-        }
-
-        data[sz] = to;
-        setListCount(ll, sz + 1);
-    }
-
     std::tuple<std::vector<SearchStepInfo>, size_t, dist_t>
     searchBaseLayerSTWithTrace(
         tableint ep_id,
@@ -696,8 +562,8 @@ getLayer0NeighborsWithDistances() const {
         tableint hidden_internal_id = HIDDEN_NODE_NONE
     ) const {
         std::vector<SearchStepInfo> path_info;
-        size_t dist_count = 0; // 거리 계산 카운터
-        size_t dim = *((size_t *) dist_func_param_); // 벡터 차원 획득
+        size_t dist_count = 0;
+        size_t dim = *((size_t *) dist_func_param_);
         size_t full_pop_count = 0;
         static constexpr float CHR_EMA_DECAY = 0.8f;
         static constexpr float CHR_EMA_UPDATE = 1.0f - CHR_EMA_DECAY;
@@ -717,12 +583,11 @@ getLayer0NeighborsWithDistances() const {
             return {path_info, 0, std::numeric_limits<dist_t>::infinity()};
         }
 
-        // --- 초기화 (원본 그대로) ---
         char* ep_data = getDataByInternalId(ep_id);
         dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
         dist_t lowerBound = dist;
         dist_t min_dist = dist;
-        dist_count++; // 카운트 증가
+        dist_count++;
 
         top_candidates.emplace(dist, ep_id);
         candidate_set.emplace(-dist, ep_id);
@@ -731,7 +596,6 @@ getLayer0NeighborsWithDistances() const {
             visited_array[hidden_internal_id] = visited_array_tag;
         }
 
-        // --- 실제 search 루프 ---
         while (!candidate_set.empty()) {
             std::pair<dist_t, tableint> current_node_pair = candidate_set.top();
             dist_t candidate_dist = -current_node_pair.first;
@@ -743,7 +607,6 @@ getLayer0NeighborsWithDistances() const {
             candidate_set.pop();
             tableint current_node_id = current_node_pair.second;
 
-            // ✅ Record popped node only in path for trace
             SearchStepInfo step{};
             step.node_id = current_node_id;
             step.result_set_size = top_candidates.size();
@@ -778,7 +641,7 @@ getLayer0NeighborsWithDistances() const {
 
                 char *currObj1 = getDataByInternalId(candidate_id);
                 dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
-                dist_count++; // 카운트 증가
+                dist_count++;
 
                 if (top_candidates.size() < ef || lowerBound > dist) {
                     candidate_set.emplace(-dist, candidate_id);
@@ -820,10 +683,9 @@ getLayer0NeighborsWithDistances() const {
         }
 
         visited_list_pool_->releaseVisitedList(vl);
-        return {path_info, dist_count, min_dist}; // 경로, 카운트, 결과셋 최소 거리 반환
+        return {path_info, dist_count, min_dist};
     }
 
-    // 전체 HNSW 검색 과정을 따르되, base layer의 path만 기록
     std::tuple<std::vector<SearchStepInfo>, size_t, dist_t>
     searchKnnWithLayer0Trace(
         const void *query_data,
@@ -836,7 +698,6 @@ getLayer0NeighborsWithDistances() const {
             return {std::vector<SearchStepInfo>(), 0, std::numeric_limits<dist_t>::infinity()};
         }
 
-        // 1. Top layer → Layer 1 탐색 (Greedy)
         tableint currObj = resolveEntryPointForHiddenNode(hidden_internal_id);
         if (isHiddenNode(currObj, hidden_internal_id)) {
             return {std::vector<SearchStepInfo>(), 0, std::numeric_limits<dist_t>::infinity()};
@@ -872,8 +733,6 @@ getLayer0NeighborsWithDistances() const {
             }
         }
 
-        // 2. Base layer 탐색 (상세 정보 포함)
-        // searchBaseLayerSTWithTrace는 이미 std::vector<SearchStepInfo>를 반환하도록 작성됨
         auto [path_info, base_dist_count, closest_dist] =
             searchBaseLayerSTWithTrace(currObj, query_data, ef, k, hidden_internal_id);
         total_dist_count += base_dist_count;
@@ -881,57 +740,7 @@ getLayer0NeighborsWithDistances() const {
         return {path_info, total_dist_count, closest_dist};
     }
 
-/**
- * =============================================================================
- * HNSW Adaptive Early Termination — Simplified Two-Phase Architecture
- * =============================================================================
- *
- * Validated on 3 datasets: GLOVE-200, GIST-960, NYTIMES-256
- *
- * ┌─────────────────────────────────────────────────────────────────────────┐
- * │                         FULL PIPELINE LOGIC                            │
- * ├─────────────────────────────────────────────────────────────────────────┤
- * │                                                                        │
- * │  PHASE 1 — CLASSIFY (pops 4 ~ 16 after result set is full)            │
- * │  ─────────────────────────────────────────────────────────────         │
- * │  Goal: Identify "easy" queries that already converge at ef=64.         │
- * │                                                                        │
- * │  At each pop:                                                          │
- * │    CHR = candidate_dist / furthest_dist                                │
- * │    (ratio of popped node's distance to the worst result in the set)    │
- * │                                                                        │
- * │  At full_pop 16, mark EASY iff classify-window                         │
- * │  chr_mean <= early_stop_ratio                                          │
- * │                                                                        │
- * │  WHY THIS WORKS:                                                       │
- * │  - Low CHR means popped node is much closer to query than the worst   │
- * │    result → the search is actively finding good neighbors              │
- * │  - Easy queries show sustained low CHR in early steps (the search     │
- * │    quickly finds a pocket of true nearest neighbors)                   │
- * │  - Hard queries maintain high CHR throughout (popped nodes are         │
- * │    always near the boundary of the result set)                         │
- * │                                                                        │
- * │  Threshold is dataset-specific and comes from the validated            │
- * │  classify-window chr_mean table in early_stop_config.py.               │
- * │  The parameter name `early_stop_ratio` is retained for API stability,  │
- * │  but it now means this direct-mean threshold.                          │
- * │                                                                        │
- * │                                                                        │
- * └─────────────────────────────────────────────────────────────────────────┘
- */
-
-/**
- * =============================================================================
- * HNSW Adaptive Early Termination — Two-Phase Architecture (v2)
- * =============================================================================
- *
- * Phase 1 — CLASSIFY (full_pop 4–16):
- *   CHR = candidate_dist / furthest_dist
- *   at full_pop 16, mark EASY iff classify-window chr_mean <= early_stop_ratio
- *
- * Phase 2 — ROUTE:
- *   Easy queries shrink the effective efSearch once after classification.
- */
+    // Classify early full-pop CHR behavior, then optionally shrink ef once.
 
 template <bool bare_bone_search, bool paper_bucket_mode>
 AdaptiveSearchResult
@@ -1087,7 +896,6 @@ searchBaseLayerAdaptiveAnalysisCore(
                 _mm_prefetch(data_level0_memory_ + candidate_set.top().second * size_data_per_element_ + offsetLevel0_, _MM_HINT_T0);
 #endif
 
-                // [최적화 3 적용] 이너 루프 내부 if constexpr 적용 및 필터 단락 평가 최적화
                 if constexpr (bare_bone_search) {
                     top_candidates.emplace(d, cand_id);
                 } else {
@@ -1481,7 +1289,6 @@ searchBaseLayerAdaptiveLightCore(
         && std::isfinite(mid_easy_upper_gamma_ratio);
     static constexpr bool   ENABLE_ONE_SHOT_EFFECTIVE_EF_SHRINK = true;
 
-    // --- Baseline 구조 유지 ---
     VisitedList *vl = visited_list_pool_->getFreeVisitedList();
     vl_type *visited_array = vl->mass;
     vl_type visited_array_tag = vl->curV;
@@ -1499,7 +1306,6 @@ searchBaseLayerAdaptiveLightCore(
 
     dist_t lowerBound;
 
-    // [추가 부분 최적화 2] if constexpr을 사용하여 bare_bone_search 시 필터 검사 데드코드 제거
     if constexpr (bare_bone_search) {
         dist_t dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
         top_candidates.emplace(dist, ep_id);
@@ -1529,7 +1335,6 @@ searchBaseLayerAdaptiveLightCore(
         candidate_set.pop();
         tableint curr_id = current_node_pair.second;
 
-        // --- Baseline 구조 유지 ---
         int *data = (int*)get_linklist0(curr_id);
         size_t size = getListCount((linklistsizeint*)data);
         tableint *datal = (tableint *)(data + 1);
@@ -1544,7 +1349,7 @@ searchBaseLayerAdaptiveLightCore(
         for (size_t j = 0; j < size; j++) {
             tableint cand_id = *(datal + j);
 #ifdef USE_SSE
-            if (j + 1 < size) { // Baseline의 j+1 유지
+            if (j + 1 < size) {
                 _mm_prefetch((char *)(visited_array + *(datal + j + 1)), _MM_HINT_T0);
                 _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
             }
@@ -1560,11 +1365,9 @@ searchBaseLayerAdaptiveLightCore(
                 _mm_prefetch(data_level0_memory_ + candidate_set.top().second * size_data_per_element_ + offsetLevel0_, _MM_HINT_T0);
 #endif
 
-                // [추가 부분 최적화 2 적용] 필터 로직 최적화
                 if constexpr (bare_bone_search) {
                     top_candidates.emplace(d, cand_id);
                 } else {
-                    // Baseline의 !isMarkedDeleted를 먼저 체크 (단락 평가로 무거운 필터 호출 방어)
                     if (!isMarkedDeleted(cand_id)) {
                         if (!isIdAllowed || (*isIdAllowed)(getExternalLabel(cand_id))) {
                             top_candidates.emplace(d, cand_id);
@@ -1582,7 +1385,6 @@ searchBaseLayerAdaptiveLightCore(
             }
         } // end for
 
-        // --- 추가된 조기 종료(Early Stopping) 최적화 ---
         if (top_candidates.size() == ef_cur) {
             full_pop_count++;
             float furthest_dist = (float)top_candidates.top().first;
@@ -1593,7 +1395,6 @@ searchBaseLayerAdaptiveLightCore(
                 smoothed_chr_ema = CHR_EMA_DECAY * smoothed_chr_ema + CHR_EMA_UPDATE * chr;
             }
 
-            // [추가 부분 최적화 3] in_classify_window 조건문을 간소화하고 classification_evaluated 평가를 window 끝에서 한 번만 수행
             if (full_pop_count >= CLASSIFY_START && full_pop_count <= CLASSIFY_END) {
                 classify_smoothed_chr_sum += smoothed_chr_ema;
                 classify_smoothed_chr_count++;
@@ -1618,8 +1419,6 @@ searchBaseLayerAdaptiveLightCore(
                         }
                     }
 
-                    // One-shot shrink: once the classify window closes, tighten
-                    // the effective runtime ef once for queries classified as easy.
                     if (ENABLE_ONE_SHOT_EFFECTIVE_EF_SHRINK && !effective_ef_shrink_applied) {
                         size_t shrunk_ef_cur = configured_ef_cur;
                         if constexpr (paper_bucket_mode) {
@@ -1675,12 +1474,11 @@ searchBaseLayerAdaptiveLightCore(
 
     visited_list_pool_->releaseVisitedList(vl);
 
-    // K개만 남기고 자르기
     while (top_candidates.size() > k) {
         top_candidates.pop();
     }
 
-    return top_candidates; // <--- 변환 없이 바로 리턴! (초고속)
+    return top_candidates;
 }
 
 
@@ -1911,7 +1709,6 @@ searchBaseLayerAdaptiveLightCore(
 
         tableint ep = getBaseLayerEntry(query_data);
 
-        // [최적화 2] 런타임에 bare_bone 여부를 판단하여 템플릿 분기
         bool bare_bone_search = !num_deleted_ && !isIdAllowed;
         if (bare_bone_search) {
             return searchBaseLayerAdaptiveAnalysis<true>(
@@ -2025,7 +1822,6 @@ searchKnnAdaptiveLight(
     tableint ep = getBaseLayerEntry(query_data);
     bool bare_bone_search = !num_deleted_ && !isIdAllowed;
 
-    // 1. Core 함수 호출 (내부 ID 큐를 반환받음)
     std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
 
     if (bare_bone_search) {
@@ -2048,14 +1844,13 @@ searchKnnAdaptiveLight(
         );
     }
 
-    // 2. 파이썬으로 넘기기 직전, 여기서 External Label로 재포장! (O(N) 벡터 초기화 최적화 적용)
     std::vector<std::pair<dist_t, labeltype>> result_vec;
     result_vec.reserve(top_candidates.size());
 
     while (!top_candidates.empty()) {
         result_vec.emplace_back(
             top_candidates.top().first,
-            getExternalLabel(top_candidates.top().second) // 여기서 변환
+            getExternalLabel(top_candidates.top().second)
         );
         top_candidates.pop();
     }
@@ -2169,11 +1964,6 @@ searchKnnAdaptiveLightPaperBucket(
     }
 
 
-    /*
-     *  -------------------------- END --------------------------
-     *
-    */
-
     std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>
     searchBaseLayer(tableint ep_id, const void *data_point, int layer) {
         VisitedList *vl = visited_list_pool_->getFreeVisitedList();
@@ -2211,7 +2001,6 @@ searchKnnAdaptiveLightPaperBucket(
                 data = (int*)get_linklist0(curNodeNum);
             } else {
                 data = (int*)get_linklist(curNodeNum, layer);
-//                    data = (int *) (linkLists_[curNodeNum] + (layer - 1) * size_links_per_element_);
             }
             size_t size = getListCount((linklistsizeint*)data);
             tableint *datal = (tableint *) (data + 1);
@@ -2224,7 +2013,6 @@ searchKnnAdaptiveLightPaperBucket(
 
             for (size_t j = 0; j < size; j++) {
                 tableint candidate_id = *(datal + j);
-//                    if (candidate_id == 0) continue;
 #ifdef USE_SSE
                 _mm_prefetch((char *) (visited_array + *(datal + j + 1)), _MM_HINT_T0);
                 _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
@@ -2321,7 +2109,6 @@ searchKnnAdaptiveLightPaperBucket(
             tableint current_node_id = current_node_pair.second;
             int *data = (int *) get_linklist0(current_node_id);
             size_t size = getListCount((linklistsizeint*)data);
-//                bool cur_node_deleted = isMarkedDeleted(current_node_id);
             if (collect_metrics) {
                 metric_hops++;
                 metric_distance_computations+=size;
@@ -2336,11 +2123,10 @@ searchKnnAdaptiveLightPaperBucket(
 
             for (size_t j = 1; j <= size; j++) {
                 int candidate_id = *(data + j);
-//                    if (candidate_id == 0) continue;
 #ifdef USE_SSE
                 _mm_prefetch((char *) (visited_array + *(data + j + 1)), _MM_HINT_T0);
                 _mm_prefetch(data_level0_memory_ + (*(data + j + 1)) * size_data_per_element_ + offsetData_,
-                                _MM_HINT_T0);  ////////////
+                                _MM_HINT_T0);
 #endif
                 if (!(visited_array[candidate_id] == visited_array_tag)) {
                     visited_array[candidate_id] = visited_array_tag;
@@ -2359,8 +2145,8 @@ searchKnnAdaptiveLightPaperBucket(
                         candidate_set.emplace(-dist, candidate_id);
 #ifdef USE_SSE
                         _mm_prefetch(data_level0_memory_ + candidate_set.top().second * size_data_per_element_ +
-                                        offsetLevel0_,  ///////////
-                                        _MM_HINT_T0);  ////////////////////////
+                                        offsetLevel0_,
+                                        _MM_HINT_T0);
 #endif
 
                         if (bare_bone_search ||
@@ -2570,18 +2356,6 @@ searchKnnAdaptiveLightPaperBucket(
                     }
 
                     setListCount(ll_other, indx);
-                    // Nearest K:
-                    /*int indx = -1;
-                    for (int j = 0; j < sz_link_list_other; j++) {
-                        dist_t d = fstdistfunc_(getDataByInternalId(data[j]), getDataByInternalId(rez[idx]), dist_func_param_);
-                        if (d > d_max) {
-                            indx = j;
-                            d_max = d;
-                        }
-                    }
-                    if (indx >= 0) {
-                        data[indx] = cur_c;
-                    } */
                 }
             }
         }
@@ -2741,7 +2515,6 @@ searchKnnAdaptiveLightPaperBucket(
 
         size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
 
-        // 무제한 edge 추가를 위해 버퍼를 100으로 확장 (일단 rollback)
         size_links_level0_ = (maxM0_ + 100) * sizeof(tableint) + sizeof(linklistsizeint);
         std::vector<std::mutex>(max_elements).swap(link_list_locks_);
         std::vector<std::mutex>(MAX_LABEL_OPERATION_LOCKS).swap(label_op_locks_);
@@ -2989,9 +2762,6 @@ searchKnnAdaptiveLightPaperBucket(
             }
 
             for (auto&& neigh : sNeigh) {
-                // if (neigh == internalId)
-                //     continue;
-
                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
                 size_t size = sCand.find(neigh) == sCand.end() ? sCand.size() : sCand.size() - 1;  // sCand guaranteed to have size >= 1
                 size_t elementsToKeep = std::min(ef_construction_, size);
