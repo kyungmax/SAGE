@@ -1,0 +1,265 @@
+#pragma once
+
+// https://github.com/nmslib/hnswlib/pull/508
+// This allows others to provide their own error stream (e.g. RcppHNSW)
+#ifndef HNSWLIB_ERR_OVERRIDE
+  #define HNSWERR std::cerr
+#else
+  #define HNSWERR HNSWLIB_ERR_OVERRIDE
+#endif
+
+#ifndef NO_MANUAL_VECTORIZATION
+#if (defined(__SSE__) || _M_IX86_FP > 0 || defined(_M_AMD64) || defined(_M_X64))
+#define USE_SSE
+#ifdef __AVX__
+#define USE_AVX
+#ifdef __AVX512F__
+#define USE_AVX512
+#endif
+#endif
+#endif
+#endif
+
+#if defined(USE_AVX) || defined(USE_SSE)
+#ifdef _MSC_VER
+#include <intrin.h>
+#include <stdexcept>
+static void cpuid(int32_t out[4], int32_t eax, int32_t ecx) {
+    __cpuidex(out, eax, ecx);
+}
+static __int64 xgetbv(unsigned int x) {
+    return _xgetbv(x);
+}
+#else
+#include <x86intrin.h>
+#include <cpuid.h>
+#include <stdint.h>
+static void cpuid(int32_t cpuInfo[4], int32_t eax, int32_t ecx) {
+    __cpuid_count(eax, ecx, cpuInfo[0], cpuInfo[1], cpuInfo[2], cpuInfo[3]);
+}
+static uint64_t xgetbv(unsigned int index) {
+    uint32_t eax, edx;
+    __asm__ __volatile__("xgetbv" : "=a"(eax), "=d"(edx) : "c"(index));
+    return ((uint64_t)edx << 32) | eax;
+}
+#endif
+
+#if defined(USE_AVX512)
+#include <immintrin.h>
+#endif
+
+#if defined(__GNUC__)
+#define PORTABLE_ALIGN32 __attribute__((aligned(32)))
+#define PORTABLE_ALIGN64 __attribute__((aligned(64)))
+#else
+#define PORTABLE_ALIGN32 __declspec(align(32))
+#define PORTABLE_ALIGN64 __declspec(align(64))
+#endif
+
+// Adapted from https://github.com/Mysticial/FeatureDetector
+#define _XCR_XFEATURE_ENABLED_MASK  0
+
+static bool AVXCapable() {
+    int cpuInfo[4];
+
+    // CPU support
+    cpuid(cpuInfo, 0, 0);
+    int nIds = cpuInfo[0];
+
+    bool HW_AVX = false;
+    if (nIds >= 0x00000001) {
+        cpuid(cpuInfo, 0x00000001, 0);
+        HW_AVX = (cpuInfo[2] & ((int)1 << 28)) != 0;
+    }
+
+    // OS support
+    cpuid(cpuInfo, 1, 0);
+
+    bool osUsesXSAVE_XRSTORE = (cpuInfo[2] & (1 << 27)) != 0;
+    bool cpuAVXSuport = (cpuInfo[2] & (1 << 28)) != 0;
+
+    bool avxSupported = false;
+    if (osUsesXSAVE_XRSTORE && cpuAVXSuport) {
+        uint64_t xcrFeatureMask = xgetbv(_XCR_XFEATURE_ENABLED_MASK);
+        avxSupported = (xcrFeatureMask & 0x6) == 0x6;
+    }
+    return HW_AVX && avxSupported;
+}
+
+static bool AVX512Capable() {
+    if (!AVXCapable()) return false;
+
+    int cpuInfo[4];
+
+    // CPU support
+    cpuid(cpuInfo, 0, 0);
+    int nIds = cpuInfo[0];
+
+    bool HW_AVX512F = false;
+    if (nIds >= 0x00000007) {  //  AVX512 Foundation
+        cpuid(cpuInfo, 0x00000007, 0);
+        HW_AVX512F = (cpuInfo[1] & ((int)1 << 16)) != 0;
+    }
+
+    // OS support
+    cpuid(cpuInfo, 1, 0);
+
+    bool osUsesXSAVE_XRSTORE = (cpuInfo[2] & (1 << 27)) != 0;
+    bool cpuAVXSuport = (cpuInfo[2] & (1 << 28)) != 0;
+
+    bool avx512Supported = false;
+    if (osUsesXSAVE_XRSTORE && cpuAVXSuport) {
+        uint64_t xcrFeatureMask = xgetbv(_XCR_XFEATURE_ENABLED_MASK);
+        avx512Supported = (xcrFeatureMask & 0xe6) == 0xe6;
+    }
+    return HW_AVX512F && avx512Supported;
+}
+#endif
+
+#include <queue>
+#include <vector>
+#include <iostream>
+#include <string.h>
+
+namespace hnswlib {
+typedef size_t labeltype;
+typedef unsigned int tableint;
+
+struct SearchStepInfo {
+    tableint node_id;               // 현재 방문 중인 내부 노드 ID
+    size_t result_set_size;         // 현재 단계의 top_candidates(W) 크기
+    size_t result_set_size_after;   // 현재 pop step 처리 후 top_candidates(W) 크기
+    bool is_full_pop_after;         // 현재 pop step 처리 후 result set이 ef까지 찼는지 여부
+    size_t full_pop_count_after;    // 현재 pop step 처리 후의 full-pop observation index
+    size_t popped_degree;           // 현재 pop된 노드의 base-layer degree
+    size_t unvisited_neighbor_count; // 현재 pop step에서 처음 본 이웃 수
+    size_t accepted_neighbor_count;  // 현재 pop step에서 candidate/result set에 채택된 이웃 수
+    float runtime_accepted_rate;    // accepted_neighbor_count / unvisited_neighbor_count
+    float runtime_chr;              // raw CHR at the current full-pop step
+    float runtime_smoothed_chr;     // EMA-smoothed CHR at the current full-pop step
+    float runtime_classify_chr_mean; // classify-window smoothed_CHR mean once available
+    bool runtime_classification_evaluated; // classify window가 닫혀 easy/hard 판정이 확정되었는지
+    bool runtime_is_easy_query;     // true_tau threshold로 easy 판정되었는지
+    bool runtime_is_super_easy_query; // super-easy policy selector에 선택되었는지
+    bool runtime_is_mid_easy_query; // 20~50% easy bucket selector에 선택되었는지
+    size_t runtime_effective_ef;    // 현재 step 종료 시점의 effective ef
+    float internal_dist;
+    float popped_query_dist;        // 현재 pop된 노드와 query 간 거리
+    float furthest_dist;            // 현재 pop step 처리 후 결과 집합의 최외곽 거리
+    float best_dist;                // 현재 pop step 처리 후 결과 집합의 최선 거리
+    float top_k_dist;               // 현재 pop step 처리 후 top-k의 k번째 거리
+    float ef_half_dist;             // 현재 pop step 처리 후 ef/2번째 거리
+    float ef_quarter_dist;          // 현재 pop step 처리 후 ef/4번째 거리
+    float sqrt_ef_dist;             // 현재 pop step 처리 후 sqrt(ef)번째 거리
+    float shadow_64_dist;           // 현재 pop step 처리 후 top-64의 64번째 거리
+    float shadow_128_dist;          // 현재 pop step 처리 후 top-128의 128번째 거리
+    float shadow_256_dist;          // 현재 pop step 처리 후 top-256의 256번째 거리
+    float shadow_512_dist;          // 현재 pop step 처리 후 top-512의 512번째 거리
+    float top_2k_dist;              // 현재 pop step 처리 후 top-2k의 2k번째 거리
+    float top_3k_dist;              // 현재 pop step 처리 후 top-3k의 3k번째 거리
+    std::vector<tableint> top_k_node_ids; // 현재 pop step 처리 후 live top-k 내부 노드 ID
+    std::vector<float> furthest_vec; // 현재 결과 집합 중 가장 먼 노드의 벡터
+};
+
+// This can be extended to store state for filtering (e.g. from a std::set)
+class BaseFilterFunctor {
+ public:
+    virtual bool operator()(hnswlib::labeltype id) { return true; }
+    virtual ~BaseFilterFunctor() {};
+};
+
+template<typename dist_t>
+class BaseSearchStopCondition {
+ public:
+    virtual void add_point_to_result(labeltype label, const void *datapoint, dist_t dist) = 0;
+
+    virtual void remove_point_from_result(labeltype label, const void *datapoint, dist_t dist) = 0;
+
+    virtual bool should_stop_search(dist_t candidate_dist, dist_t lowerBound) = 0;
+
+    virtual bool should_consider_candidate(dist_t candidate_dist, dist_t lowerBound) = 0;
+
+    virtual bool should_remove_extra() = 0;
+
+    virtual void filter_results(std::vector<std::pair<dist_t, labeltype >> &candidates) = 0;
+
+    virtual ~BaseSearchStopCondition() {}
+};
+
+template <typename T>
+class pairGreater {
+ public:
+    bool operator()(const T& p1, const T& p2) {
+        return p1.first > p2.first;
+    }
+};
+
+template<typename T>
+static void writeBinaryPOD(std::ostream &out, const T &podRef) {
+    out.write((char *) &podRef, sizeof(T));
+}
+
+template<typename T>
+static void readBinaryPOD(std::istream &in, T &podRef) {
+    in.read((char *) &podRef, sizeof(T));
+}
+
+template<typename MTYPE>
+using DISTFUNC = MTYPE(*)(const void *, const void *, const void *);
+
+template<typename MTYPE>
+class SpaceInterface {
+ public:
+    // virtual void search(void *);
+    virtual size_t get_data_size() = 0;
+
+    virtual DISTFUNC<MTYPE> get_dist_func() = 0;
+
+    virtual void *get_dist_func_param() = 0;
+
+    virtual ~SpaceInterface() {}
+};
+
+template<typename dist_t>
+class AlgorithmInterface {
+ public:
+    virtual void addPoint(const void *datapoint, labeltype label, bool replace_deleted = false) = 0;
+
+    virtual std::priority_queue<std::pair<dist_t, labeltype>>
+        searchKnn(const void*, size_t, BaseFilterFunctor* isIdAllowed = nullptr) const = 0;
+
+    // Return k nearest neighbor in the order of closer fist
+    virtual std::vector<std::pair<dist_t, labeltype>>
+        searchKnnCloserFirst(const void* query_data, size_t k, BaseFilterFunctor* isIdAllowed = nullptr) const;
+
+    virtual void saveIndex(const std::string &location) = 0;
+    virtual ~AlgorithmInterface(){
+    }
+};
+
+template<typename dist_t>
+std::vector<std::pair<dist_t, labeltype>>
+AlgorithmInterface<dist_t>::searchKnnCloserFirst(const void* query_data, size_t k,
+                                                 BaseFilterFunctor* isIdAllowed) const {
+    std::vector<std::pair<dist_t, labeltype>> result;
+
+    // here searchKnn returns the result in the order of further first
+    auto ret = searchKnn(query_data, k, isIdAllowed);
+    {
+        size_t sz = ret.size();
+        result.resize(sz);
+        while (!ret.empty()) {
+            result[--sz] = ret.top();
+            ret.pop();
+        }
+    }
+
+    return result;
+}
+}  // namespace hnswlib
+
+#include "space_l2.h"
+#include "space_ip.h"
+#include "stop_condition.h"
+#include "bruteforce.h"
+#include "hnswalg.h"
