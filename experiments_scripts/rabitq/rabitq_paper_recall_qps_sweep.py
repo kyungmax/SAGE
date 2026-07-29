@@ -54,7 +54,7 @@ TOPK = 10
 TMIN_POPS = 25
 PAPER_BUCKET_COUNT = 4
 FIXED_LID_POOL_SIZE = 10000
-DEFAULT_EFS = [64,80,96,128,160,192,256,320,384,512,640,768,896,1024]
+DEFAULT_EFS = [64, 80, 96, 128, 160, 192, 256, 320, 384, 512, 640, 768, 896, 1024]
 DEFAULT_RECOMMENDATION_EPS = 0.001
 
 
@@ -86,49 +86,24 @@ DATASETS = {
         "metric": "ip",
         "normalize": True,
     },
-    "glove-100-angular": {
-        "h5": DATA_DIR / "glove-100-angular.hdf5",
-        "metric": "ip",
-        "normalize": True,
-    },
-    "msmarco-v1-openai-ada2-full-ip": {
-        "h5": DATA_DIR / "msmarco-v1-openai-ada2-full-ip.hdf5",
-        "metric": "ip",
-        "normalize": False,
-    },
     "msspacev-100M-i8-euclidean": {
         "h5": DATA_DIR / "msspacev-100M-i8-euclidean.hdf5",
         "raw_i8bin": MSSPACEV_RAW,
         "metric": "l2",
         "normalize": False,
     },
-    "nytimes-256-angular": {
-        "h5": DATA_DIR / "nytimes-256-angular.hdf5",
-        "metric": "ip",
-        "normalize": True,
-    },
     "youtube-15M-angular": {
         "h5": DATA_DIR / "youtube-15M-angular.hdf5",
         "metric": "l2",
         "normalize": True,
-    },
-    "landmark-nomic-768-angular": {
-        "h5": DATA_DIR / "landmark-nomic-768-angular.hdf5",
-        "metric": "ip",
-        "normalize": False,
     },
 }
 
 ALIASES = {
     "agnews": "agnews-mxbai-1024-euclidean",
     "cohere": "cohere-768-angular",
-    "glove": "glove-100-angular",
-    "msmarco": "msmarco-v1-openai-ada2-full-ip",
-    "msmarco_v1": "msmarco-v1-openai-ada2-full-ip",
     "msspacev": "msspacev-100M-i8-euclidean",
-    "nytimes": "nytimes-256-angular",
     "youtube": "youtube-15M-angular",
-    "landmark": "landmark-nomic-768-angular",
 }
 
 
