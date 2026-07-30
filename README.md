@@ -35,11 +35,11 @@ through `knn_query_adaptive_light`.
   wrappers, manifests, final CSVs, and combined recall-latency plot assets.
 - `final_experiments/02_drill_down/` -- easy/medium/hard query-group analysis
   and false-easy replay scripts.
-- `final_experiments/03_better_index_quality/` -- HNSW graph-quality study.
-- `final_experiments/04_offline_cost/` -- offline calibration-cost study.
+- `final_experiments/03_offline_cost/` -- offline calibration-cost study.
+- `final_experiments/04_ablation_study/` -- SAGE component ablations.
 - `final_experiments/05_embedding_model_effects/` -- embedding-model comparison.
-- `final_experiments/06_ablation_study/` -- SAGE component ablations.
-- `final_experiments/07_adaptive_efc/` -- adaptive `efConstruction` experiments.
+- `final_experiments/06_better_index_quality/` -- HNSW graph-quality study.
+- `final_experiments/07_darth_ada-ef/` -- DARTH and Ada-EF target-0.99 comparison scripts.
 - `final_analysis/` -- analysis scripts and submission-figure generation for
   probe representativeness, difficulty drill-down, CFR behavior, and backend
   distance-count checks.
@@ -58,7 +58,7 @@ through `knn_query_adaptive_light`.
 - 2x Intel Xeon Gold 6442Y CPUs
 - 1 TiB DDR5 DRAM
 - NVMe storage
-- TODO: confirm OS version used for the final artifact image
+- Ubuntu 24.04.1 LTS (Noble Numbat)
 
 ## Software Dependencies
 
@@ -170,7 +170,7 @@ raw logs, and cache directories should not be committed to git.
 Default paper configuration:
 - EF sweep: `64,80,96,128,160,192,256,320,384,512,640,768,896,1024`
 - calibration probes: `ncal=100`
-- calibration sampling: `100` uniformly random train nodes for the main8 runs
+- calibration sampling: random 10,000-node LID pool, trimmed to the 1st--99th percentiles, then 100 LID-quantile calibration probes
 - classification window: `[4,16]`
 - CFR EMA decay: `alpha=0.8`
 - routing buckets: `B=4`
@@ -186,15 +186,15 @@ directory and consolidated CSV/Markdown summaries under `final/`.
 
 | Paper result | Driver | Description | Backend |
 |--------------|--------|-------------|---------|
-| Main eight-dataset sweep | `final_experiments/01_main_results/run_main8_online24_random100_calibration_20260724.py` | Vanilla HNSW vs SAGE over the EF ladder for both FAISS and hnswlib | FAISS + hnswlib |
+| Main eight-dataset sweep | `final_experiments/01_main_results/run_main8_online24_20260707.py` | Vanilla HNSW vs SAGE over the EF ladder for both FAISS and hnswlib | FAISS + hnswlib |
 | Main plotting | `final_experiments/01_main_results/main8_online24/combined_faiss_SIMD/` | Builds the eight-dataset recall-latency plot from final sweep CSVs | FAISS + hnswlib |
 | Backend-specific sweep | `experiments_scripts/{faiss,hnswlib}/run_main_qps_latency_sweep.py` | Lower-level per-backend runners used by the main8 wrapper | FAISS / hnswlib |
 | Difficulty drill-down | `final_experiments/02_drill_down/scripts/` | Easy/medium/hard group analysis and false-easy replay | FAISS + hnswlib |
-| Index-quality study | `final_experiments/03_better_index_quality/scripts/` | Varying HNSW graph quality (`M`, `efConstruction`) | FAISS |
-| Offline calibration cost | `final_experiments/04_offline_cost/` | Calibration cost versus adaptive baselines | FAISS + hnswlib |
-| Embedding-model effects | `final_experiments/05_embedding_model_effects/` | MSMARCO embedding-model comparison | FAISS |
-| Ablation study | `final_experiments/06_ablation_study/` | Calibration size, CFR EMA, window, tiers, and pair gap | FAISS + hnswlib |
-| Adaptive `efConstruction` | `final_experiments/07_adaptive_efc/` | Index-build adaptation experiments | FAISS |
+| Offline calibration cost | `final_experiments/03_offline_cost/run_all_simd_24t.sh` | SAGE offline calibration cost with 24-thread SIMD-on FAISS and hnswlib | FAISS + hnswlib |
+| Ablation study | `final_experiments/04_ablation_study/` | FAISS GloVe/Cohere parameter sensitivity and pseudo-GT check | FAISS |
+| Embedding-model effects | `final_experiments/05_embedding_model_effects/` | MSMARCO five-embedding comparison with FAISS SIMD-on 24-thread runner | FAISS |
+| Index-quality study | `final_experiments/06_better_index_quality/run_faiss_simd_ndis_ef1024.py` | Varying HNSW graph quality (`M`, `efConstruction`) | FAISS |
+| DARTH / Ada-EF target-0.99 | `final_experiments/07_darth_ada-ef/` | SOTA comparison on Cohere/MSMARCO with SIMD-on full-query runs | FAISS + hnswlib |
 
 TODO: replace `Paper result` labels with final VLDB figure/table numbers.
 
@@ -203,12 +203,13 @@ TODO: replace `Paper result` labels with final VLDB figure/table numbers.
 ```bash
 export SAGE_ROOT=/path/to/sage
 export SAGE_DATA_DIR=/path/to/datasets
-export SAGE_INDEX_DIR=/path/to/index/faiss_m32_efc500_main8_20260707/darth/index
+export SAGE_INDEX_DIR=/path/to/hnswlib/index
+export SAGE_FAISS_INDEX_ROOT=/path/to/faiss_m32_efc500_main8_20260707/darth/index
 export FAISS_PYTHON_PATH=$SAGE_ROOT/faiss/build_sage_avx512/faiss/python
 
 cd $SAGE_ROOT/final_experiments/01_main_results
-python3 run_main8_online24_random100_calibration_20260724.py run-all \
-    --out-root main8_online24_random100_calibration
+python3 run_main8_online24_20260707.py run-all \
+    --out-root main8_online24
 ```
 
 By default this runs all eight datasets:
@@ -227,17 +228,16 @@ landmark-nomic-768-angular.hdf5
 Run one backend cell only:
 
 ```bash
-python3 run_main8_online24_random100_calibration_20260724.py run-cell --cell faiss
-python3 run_main8_online24_random100_calibration_20260724.py run-cell --cell hnswlib
+python3 run_main8_online24_20260707.py run-cell --cell faiss
+python3 run_main8_online24_20260707.py run-cell --cell hnswlib
 ```
 
 Main outputs:
 
 ```text
-final_experiments/01_main_results/main8_online24_random100_calibration/{faiss,hnswlib}/final/main_qps_latency_sweep.csv
-final_experiments/01_main_results/main8_online24_random100_calibration/{faiss,hnswlib}/final/offline_recommended_efsearch.csv
-final_experiments/01_main_results/main8_online24_random100_calibration/{faiss,hnswlib}/final/offline_predicted_recall_curve.csv
-final_experiments/01_main_results/main8_online24_random100_calibration/manifest.json
+final_experiments/01_main_results/main8_online24/{faiss,hnswlib}/final/main_qps_latency_sweep.csv
+final_experiments/01_main_results/main8_online24/{faiss,hnswlib}/final/offline_recommended_efsearch.csv
+final_experiments/01_main_results/main8_online24/{faiss,hnswlib}/final/offline_predicted_recall_curve.csv
 ```
 
 ### Build the Combined Main Plot
@@ -255,50 +255,81 @@ TODO: wire the final all8 plot-only wrapper into `plots/`.
 
 ```bash
 cd $SAGE_ROOT/final_experiments/02_drill_down
-# TODO: replace with the final all8 drill-down launcher once script names are frozen.
+./run_faiss_simd_24t.sh
 ```
 
 Primary outputs include:
-- `difficulty_exactgt_24t/query_groups.csv`
-- `difficulty_exactgt_24t/group_ef_sweep.csv`
-- `difficulty_exactgt_24t/group_pair_metrics.csv`
-- `hard_loss_querywise_exactgt_24t/hard_loss_querywise.csv`
-- `large_false_easy_drop_analysis/large_false_easy_summary_by_dataset_ef.csv`
-
-### Ablation Study
-
-```bash
-cd $SAGE_ROOT/final_experiments/06_ablation_study
-
-# Inspect the planned grid
-python3 run_all_ablation_studies.py --dry-run
-
-# Run all hnswlib ablations
-python3 run_all_ablation_studies.py
-
-# Run FAISS ablations
-# TODO: add the final all8 FAISS ablation launcher once frozen.
-```
-
-FAISS ablation defaults cover calibration size, CFR EMA, classification window,
-tiers, and pair gap.
+- `drilldown_faiss_SIMD_on_main8_24t/difficulty_exactgt_24t/query_groups.csv`
+- `drilldown_faiss_SIMD_on_main8_24t/difficulty_exactgt_24t/group_ef_sweep.csv`
+- `drilldown_faiss_SIMD_on_main8_24t/difficulty_exactgt_24t/group_pair_metrics.csv`
+- `drilldown_faiss_SIMD_on_main8_24t/hard_loss_querywise_exactgt_24t/hard_loss_querywise.csv`
+- `drilldown_faiss_SIMD_on_main8_24t/large_false_easy_drop_analysis/large_false_easy_summary_by_dataset_ef.csv`
 
 ### Offline Calibration Cost
 
 ```bash
-cd $SAGE_ROOT/final_experiments/04_offline_cost
-python3 assemble_offline_cost_results.py
+cd $SAGE_ROOT/final_experiments/03_offline_cost
+./run_all_simd_24t.sh
 ```
 
-TODO: add the exact rerun command once the final offline-cost runner is frozen.
+Run one backend only:
+
+```bash
+./run_faiss_simd_24t.sh
+./run_hnswlib_simd_24t.sh
+```
+
+Primary outputs:
+- `offline_cost_main8_faiss_SIMD_on_24t/final/faiss_offline_cost_median.csv`
+- `offline_cost_main8_hnswlib_SIMD_on_24t/final/hnswlib_offline_cost_median.csv`
+
+### Ablation Study
+
+```bash
+cd $SAGE_ROOT/final_experiments/04_ablation_study
+python3 scripts/preflight_faiss_glove_cohere_ablation.py
+export OUT_ROOT=$PWD/sage_ablation_faiss_glove_cohere_24t_m32_efc500_ef1024
+./run_faiss_glove_cohere_ablation_24t.sh
+export PSEUDOGT_OUT_DIR=$PWD/probe_pseudo_gt_vs_exact_glove_cohere_faiss_p100_ef4096
+./run_faiss_glove_cohere_pseudogt_24t.sh
+```
+
+This reproduces the FAISS paper ablation on `glove-100-angular.hdf5` and `cohere-768-angular.hdf5`: `ncal`, CFR window, tier count `B`, EMA `alpha`, safety margin `g`, and the pseudo-GT vs exact-GT calibration check.
 
 ### Embedding-Model Effects
 
+This study evaluates the same MSMARCO passage/query corpus under five embedding spaces: mean-pooled GloVe, mean-pooled FastText, OpenAI ada-002, BGE-M3, and EmbeddingGemma-300M. Each HDF5 must contain exact ground truth for its own embedding space.
+
 ```bash
 cd $SAGE_ROOT/final_experiments/05_embedding_model_effects
-bash run_msmarco_embedding_models_faiss_24t_20260715.sh
-python3 plot_full_mean_glove_iso_speedup.py
+export OUT_ROOT=$PWD/msmarco_embedding_models_faiss_SIMD_on_24t
+python3 scripts/preflight_msmarco_embedding_models.py
+./run_msmarco_embedding_models_faiss_24t.sh
+python3 scripts/summarize_msmarco_embedding_model_effects.py --final-dir "$OUT_ROOT/sage_results/final"
 ```
+
+The runner uses FAISS, SIMD on, 24 offline/online threads, `M=32`, `efConstruction=500`, and the paper EF ladder. Missing FAISS indexes are built on first use; missing HDF5 embedding datasets must be prepared first.
+
+### Index Quality
+
+```bash
+cd $SAGE_ROOT/final_experiments/06_better_index_quality
+python3 run_faiss_simd_ndis_ef1024.py \
+    --policy-csv /path/to/combined_faiss_main_qps_latency_sweep.csv \
+    --build-missing-indexes
+```
+
+This study records FAISS SIMD-on distance-computation reduction and recall loss, not QPS.
+
+### DARTH / Ada-EF Target-0.99
+
+```bash
+cd $SAGE_ROOT/final_experiments/07_darth_ada-ef
+python3 scripts/preflight_darth_adaef_cohere_msmarco.py
+./run_darth_adaef_cohere_msmarco_simd_target099.sh
+```
+
+This reproduces the SOTA comparison scope from the paper: CohereWiki and MSMARCO only, target recall `0.99`, SIMD-on local builds, offline preparation on 24 threads, and full-query single-thread online latency. Use `scripts/build_darth_simd_avx512.sh` and `scripts/build_adaef_simd_avx512.sh` first if preflight reports missing binaries.
 
 ## Baselines
 
@@ -315,8 +346,8 @@ Ada-EF and DARTH outputs used by the combined plot are stored under
 tree under `final_experiments/01_main_results/` keeps the copied baseline JSONs
 used by the plot; the main8 wrapper reruns the SAGE and vanilla HNSW cells.
 
-TODO: add exact from-scratch Ada-EF and DARTH setup commands and commit hashes.
-Baseline rerun scripts are preserved under `experiments_scripts/ada-ef/` and
+From-scratch target-0.99 baseline rerun scripts are in `final_experiments/07_darth_ada-ef/`.
+Lower-level wrappers are preserved under `experiments_scripts/ada-ef/` and
 `experiments_scripts/darth/`. Source-only DARTH and Ada-EF baseline code lives under
 `baselines/`; see `baselines/README.md` for provenance and build commands.
 

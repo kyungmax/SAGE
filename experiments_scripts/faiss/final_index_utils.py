@@ -69,6 +69,12 @@ DATASET_SPECS: dict[str, DatasetSpec] = {
     "msspacev-100M-i8-euclidean": DatasetSpec("msspacev-100M-i8-euclidean", "l2"),
     "youtube-15M-angular.hdf5": DatasetSpec("youtube-15M-angular", "cosine"),
     "youtube-15M-angular": DatasetSpec("youtube-15M-angular", "cosine"),
+    "agnews-mxbai-1024-euclidean.hdf5": DatasetSpec("agnews-mxbai-1024-euclidean", "l2"),
+    "agnews-mxbai-1024-euclidean": DatasetSpec("agnews-mxbai-1024-euclidean", "l2"),
+    "landmark-nomic-768-angular.hdf5": DatasetSpec("landmark-nomic-768-angular", "cosine"),
+    "landmark-nomic-768-angular": DatasetSpec("landmark-nomic-768-angular", "cosine"),
+    "landmark-nomic-768-normalized.hdf5": DatasetSpec("landmark-nomic-768-angular", "cosine"),
+    "landmark-nomic-768-normalized": DatasetSpec("landmark-nomic-768-angular", "cosine"),
 }
 
 
