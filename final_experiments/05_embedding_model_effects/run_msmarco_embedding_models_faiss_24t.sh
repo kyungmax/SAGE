@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SAGE_PROJECT_ROOT:-${SCRIPT_DIR}/../..}" && pwd)"
 OUT_ROOT="${OUT_ROOT:-${SCRIPT_DIR}/msmarco_embedding_models_faiss_SIMD_on_24t_$(date '+%Y%m%d_%H%M%S')}"
 LOG_DIR="${OUT_ROOT}/logs"
 LOG="${LOG_DIR}/run_msmarco_embedding_models_faiss_24t.log"
@@ -14,7 +15,7 @@ export OMP_NUM_THREADS=24
 export OPENBLAS_NUM_THREADS=24
 export MKL_NUM_THREADS=24
 export NUMEXPR_NUM_THREADS=24
-export FAISS_PYTHON_PATH="${FAISS_PYTHON_PATH:-/home/kyungmin/vectordb/faiss/build_hnsw_py312_avx512/faiss/python}"
+export FAISS_PYTHON_PATH="${FAISS_PYTHON_PATH:-${REPO_ROOT}/faiss/build_sage_avx512/faiss/python}"
 
 cd "${SCRIPT_DIR}"
 

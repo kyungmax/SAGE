@@ -7,13 +7,9 @@ committed here.
 ## Provenance
 
 The DARTH code was copied from the live target-0.99 session running on
-2026-07-28:
-
-```text
-PID: 2184416
-cwd: /home/kyungmin/vectordb/hnsw-playground/trials_on_fixing_search_process/adaptive_efsearch/papers/ours/final_experiments/08_darth_ada-ef
-cmd: /home/kyungmin/anaconda3/envs/hnsw/bin/python3 -u scripts/run_darth_target099_main4.py --run-root /home/kyungmin/vectordb/hnsw-playground/index/darth_m32_efc500_target099_main4_20260728_run02 --datasets agnews,landmark-nomic,cohere,msmarco --threads 24 --train-threads 24
-```
+2026-07-28. Machine-specific source, dataset, index, and Python paths from that
+session were intentionally replaced by repository-relative defaults and
+environment overrides.
 
 Copied DARTH source paths:
 
@@ -46,34 +42,34 @@ python3 -m pip install -r baselines/darth/benchmarking-darth/requirements.txt
 Build the DARTH HNSW test binary and local FAISS shared library:
 
 ```bash
-cd baselines/darth/benchmarking-darth
-BUILD_DIR=build-local JOBS=24 ./build_hnsw_local.sh
+cd final_experiments/07_darth_ada-ef
+JOBS=24 ./scripts/build_darth_simd_avx512.sh
 ```
 
 The expected binary after build is:
 
 ```text
-baselines/darth/benchmarking-darth/build-local/hnsw-test/hnsw_test
+baselines/darth/benchmarking-darth/build-simd-avx512/hnsw-test/hnsw_test
 ```
 
-`build_hnsw_local.sh` locates the installed Python `lightgbm` package and uses a
-LightGBM source distribution for headers. Override `LIGHTGBM_VERSION`,
-`LIGHTGBM_SRC_DIR`, `LIGHTGBM_LIB`, or `LIGHTGBM_INCLUDE_DIR` if the local
-environment differs.
+The build helper locates the installed Python `lightgbm` package and downloads a
+matching LightGBM source distribution for headers when needed. Override
+`LIGHTGBM_VERSION`, `LIGHTGBM_SRC_DIR`, `LIGHTGBM_LIB`, or
+`LIGHTGBM_INCLUDE_DIR` if the local environment differs.
 
 ## Build Ada-EF
 
 Ada-EF requires CMake, a C++17 compiler, OpenMP, HDF5 C++ libraries, Eigen3, and
-Boost headers. The helper script auto-detects common conda env locations when
-`CONDA_PREFIX` is unset.
+Boost headers. Set `CONDA_PREFIX` when those dependencies live in a specific
+conda environment; otherwise the helper uses standard system/CMake search paths.
 
 ```bash
-cd baselines/ada-ef
-CONDA_PREFIX=/path/to/adaef ./scripts/build.sh
+cd final_experiments/07_darth_ada-ef
+JOBS=24 ./scripts/build_adaef_simd_avx512.sh
 ```
 
 The expected binary after build is:
 
 ```text
-baselines/ada-ef/build/backend_runner
+experiments_scripts/ada-ef/build-simd-avx512/backend_runner
 ```

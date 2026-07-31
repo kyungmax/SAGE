@@ -20,8 +20,9 @@ ROOT = SCRIPT_PATH.parents[1]
 REPO_ROOT = SCRIPT_PATH.parents[3]
 EXPERIMENTS_ROOT = REPO_ROOT / "experiments_scripts"
 FAISS_IMPL_ROOT = EXPERIMENTS_ROOT / "faiss"
-DEFAULT_LEGACY_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground")
-DEFAULT_PROJECT_ROOT = Path(os.environ.get("HNSW_PLAYGROUND_ROOT", str(DEFAULT_LEGACY_ROOT))).expanduser()
+DEFAULT_PROJECT_ROOT = Path(
+    os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))
+).expanduser()
 DEFAULT_DATASET_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
 DEFAULT_INDEX_ROOT = Path(
     os.environ.get(
@@ -33,10 +34,7 @@ DEFAULT_INDEX_ROOT = Path(
     )
 ).expanduser()
 DEFAULT_FAISS_PYTHON_PATH = Path(
-    os.environ.get(
-        "FAISS_PYTHON_PATH",
-        "/home/kyungmin/vectordb/faiss/build_hnsw_py312_avx512/faiss/python",
-    )
+    os.environ.get("FAISS_PYTHON_PATH", str(REPO_ROOT / "faiss/build_sage_avx512/faiss/python"))
 ).expanduser()
 
 
@@ -124,7 +122,7 @@ def install_build_on_miss_index_loader(final_index_utils, sweep_module, *, build
 def main(argv: Sequence[str] | None = None) -> int:
     wrapper_args, pass_through = parse_wrapper_args(sys.argv[1:] if argv is None else argv)
 
-    os.environ.setdefault("HNSW_PLAYGROUND_ROOT", str(DEFAULT_PROJECT_ROOT))
+    os.environ.setdefault("SAGE_PROJECT_ROOT", str(DEFAULT_PROJECT_ROOT))
     os.environ.setdefault("FAISS_OPT_LEVEL", "AVX512")
     os.environ.setdefault("FAISS_INDEX_ROOT", str(DEFAULT_INDEX_ROOT))
     os.environ.setdefault("FAISS_PYTHON_PATH", str(DEFAULT_FAISS_PYTHON_PATH))

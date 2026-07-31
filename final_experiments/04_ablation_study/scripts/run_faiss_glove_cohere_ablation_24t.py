@@ -19,8 +19,9 @@ ROOT = SCRIPT_PATH.parents[1]
 REPO_ROOT = SCRIPT_PATH.parents[3]
 CELL_RUNNER = SCRIPT_PATH.parent / "run_faiss_ablation_cell_with_build_index.py"
 SUMMARY_SCRIPT = SCRIPT_PATH.parent / "summarize_faiss_glove_cohere_ablation.py"
-DEFAULT_LEGACY_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground")
-DEFAULT_PROJECT_ROOT = Path(os.environ.get("HNSW_PLAYGROUND_ROOT", str(DEFAULT_LEGACY_ROOT))).expanduser()
+DEFAULT_PROJECT_ROOT = Path(
+    os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))
+).expanduser()
 DEFAULT_DATASET_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
 DEFAULT_INDEX_ROOT = Path(
     os.environ.get(
@@ -32,13 +33,9 @@ DEFAULT_INDEX_ROOT = Path(
     )
 ).expanduser()
 DEFAULT_FAISS_PYTHON_PATH = Path(
-    os.environ.get(
-        "FAISS_PYTHON_PATH",
-        "/home/kyungmin/vectordb/faiss/build_hnsw_py312_avx512/faiss/python",
-    )
+    os.environ.get("FAISS_PYTHON_PATH", str(REPO_ROOT / "faiss/build_sage_avx512/faiss/python"))
 ).expanduser()
-DEFAULT_PYTHON = Path("/home/kyungmin/anaconda3/envs/hnsw/bin/python3")
-DEFAULT_CELL_PYTHON = os.environ.get("SAGE_PYTHON", str(DEFAULT_PYTHON if DEFAULT_PYTHON.exists() else Path(sys.executable)))
+DEFAULT_CELL_PYTHON = os.environ.get("SAGE_PYTHON", str(Path(sys.executable)))
 DEFAULT_DATASETS = (
     "glove-100-angular.hdf5",
     "cohere-768-angular.hdf5",

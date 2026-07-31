@@ -28,12 +28,11 @@ if str(EXPERIMENTS_ROOT) not in sys.path:
 
 
 def _default_project_root() -> Path:
-    for key in ("HNSW_PLAYGROUND_ROOT", "SAGE_PROJECT_ROOT"):
+    for key in ("SAGE_PROJECT_ROOT",):
         value = os.environ.get(key)
         if value:
             return Path(value).expanduser().resolve()
-    legacy = Path("/home/kyungmin/vectordb/hnsw-playground")
-    return legacy if legacy.exists() else REPO_ROOT
+    return REPO_ROOT
 
 
 PROJECT_ROOT = _default_project_root()
@@ -118,7 +117,7 @@ def load_module_from_path(name: str, path: Path):
 
 def configure_backend(args: argparse.Namespace) -> None:
     global build_original_index, BACKEND_LABEL
-    os.environ.setdefault("HNSW_PLAYGROUND_ROOT", str(PROJECT_ROOT))
+    os.environ.setdefault("SAGE_PROJECT_ROOT", str(PROJECT_ROOT))
     os.environ["FAISS_PYTHON_PATH"] = str(args.faiss_python_path.expanduser().resolve())
     os.environ["FAISS_INDEX_ROOT"] = str(args.faiss_index_root.expanduser().resolve())
     os.environ.setdefault("FAISS_OPT_LEVEL", "AVX512")

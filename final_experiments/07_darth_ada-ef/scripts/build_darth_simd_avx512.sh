@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SAGE_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-DARTH_ROOT="${SAGE_DARTH_ROOT:-${SAGE_ROOT}/baselines/darth/benchmarking-darth}"
+PROJECT_ROOT="$(cd "${SAGE_PROJECT_ROOT:-${SCRIPT_DIR}/../../..}" && pwd)"
+DARTH_ROOT="${SAGE_DARTH_ROOT:-${PROJECT_ROOT}/baselines/darth/benchmarking-darth}"
 BUILD_DIR="${SAGE_DARTH_SIMD_BUILD_ROOT:-${DARTH_ROOT}/build-simd-avx512}"
 TMP_ROOT="${TMPDIR:-/tmp}"
 LIGHTGBM_VERSION="${LIGHTGBM_VERSION:-4.5.0}"
@@ -12,7 +12,7 @@ LIGHTGBM_SRC_DIR="${LIGHTGBM_SRC_DIR:-${LIGHTGBM_SDIST_ROOT}/lightgbm-${LIGHTGBM
 LIGHTGBM_TARBALL="${LIGHTGBM_TARBALL:-${TMP_ROOT}/lightgbm-${LIGHTGBM_VERSION}.tar.gz}"
 JOBS="${JOBS:-$(nproc)}"
 SIMD_CXX_FLAGS="${SIMD_CXX_FLAGS:--mavx2 -mfma -mf16c -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw -mpopcnt}"
-RELEASE_FLAGS="${CMAKE_CXX_FLAGS_RELEASE:--O3 -DNDEBUG ${SIMD_CXX_FLAGS}}"
+RELEASE_FLAGS="${CMAKE_CXX_FLAGS_RELEASE:--O3 -DNDEBUG -DMM_MALLOC=1 ${SIMD_CXX_FLAGS}}"
 
 if [[ ! -f "${DARTH_ROOT}/CMakeLists.txt" ]]; then
   echo "DARTH source root not found: ${DARTH_ROOT}" >&2

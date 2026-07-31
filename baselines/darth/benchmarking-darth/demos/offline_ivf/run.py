@@ -3,6 +3,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import argparse
+import os
 from utils import (
     load_config,
     add_group_args,
@@ -174,7 +175,7 @@ if __name__ == "__main__":
         group,
         "--logs_dir",
         type=str,
-        default="/checkpoint/marialomeli/offline_faiss/logs",
+        default=os.environ.get("DARTH_OFFLINE_IVF_LOGS", "./artifacts/darth/offline_faiss/logs"),
         help="cluster job name",
     )
 

@@ -14,7 +14,7 @@ Imported scope:
 Run the full main8 FAISS drill-down:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/02_drill_down
+cd $SAGE_PROJECT_ROOT/final_experiments/02_drill_down
 ./run_faiss_simd_24t.sh
 ```
 

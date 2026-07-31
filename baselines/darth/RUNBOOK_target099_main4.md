@@ -65,7 +65,7 @@ DARTH final6 target 0.95:
 ## Notes
 
 - `../01_main_results/baselines/{adaef,darth}` also contains consolidated copies of the final6 baseline results. It was not copied here to avoid duplicating the same artifacts.
-- The YouTube 15M README references large Ada-EF and DARTH result directories under `/home/kyungmin/vectordb/hnsw-playground/index/`, but those referenced directories are not present on this machine. The preserved local material is limited to scripts, logs, README, and non-Ada-EF/DARTH HNSWLib/FAISS outputs in the original final-experiments folder.
+- The YouTube 15M README references large Ada-EF and DARTH result directories under `$SAGE_INDEX_DIR/`, but those referenced directories are not present on this machine. The preserved local material is limited to scripts, logs, README, and non-Ada-EF/DARTH HNSWLib/FAISS outputs in the original final-experiments folder.
 - For SpaceV 100M DARTH, the preserved local directory includes result JSON/TXT, logs, and `scripts/run_paper_offline_fromscratch.py`; the original index working directory referenced by its summary is not present.
 
 ## DARTH Target 0.99 Main-4 Runbook
@@ -81,30 +81,30 @@ Selected datasets:
 
 DARTH execution wrapper:
 
-- `/home/kyungmin/vectordb/hnsw-playground/trials_on_fixing_search_process/adaptive_efsearch/papers/ours/final_experiments/08_darth_ada-ef/scripts/run_darth_target099_main4.py`
+- `$SAGE_ROOT/final_experiments/07_darth_ada-ef/scripts/run_darth_target099_main4.py`
 
 Preserved Python implementation source used by the wrapper:
 
-- `/home/kyungmin/vectordb/hnsw-playground/trials_on_fixing_search_process/adaptive_efsearch/papers/ours/final_experiments/08_darth_ada-ef/imported/final_implementation_reference/darth/scripts/run_paper_offline_fromscratch.py`
+- `$SAGE_ROOT/final_experiments/07_darth_ada-ef/imported/final_implementation_reference/darth/scripts/run_paper_offline_fromscratch.py`
 
 Metric-aware DARTH C++ source and binary used by the wrapper:
 
-- Source: `/home/kyungmin/vectordb/hnsw-playground/trials_on_fixing_search_process/adaptive_efsearch/outdated/experiments/darth/benchmarking-darth/hnsw-test/hnsw_test.cpp`
-- Binary: `/home/kyungmin/vectordb/hnsw-playground/trials_on_fixing_search_process/adaptive_efsearch/outdated/experiments/darth/benchmarking-darth/build-local/hnsw-test/hnsw_test`
-- FAISS shared libraries: `/home/kyungmin/vectordb/hnsw-playground/trials_on_fixing_search_process/adaptive_efsearch/outdated/experiments/darth/benchmarking-darth/build-local/faiss`
+- Source: `$SAGE_ROOT/baselines/darth/benchmarking-darth/hnsw-test/hnsw_test.cpp`
+- Binary: `$SAGE_ROOT/baselines/darth/benchmarking-darth/build-local/hnsw-test/hnsw_test`
+- FAISS shared libraries: `$SAGE_ROOT/baselines/darth/benchmarking-darth/build-local/faiss`
 
 Input datasets:
 
-- Root: `/home/kyungmin/vectordb/hnsw-playground/datasets`
-- agnews: `/home/kyungmin/vectordb/hnsw-playground/datasets/agnews-mxbai-1024-euclidean.hdf5`
-- cohere: `/home/kyungmin/vectordb/hnsw-playground/datasets/cohere-768-angular.hdf5`
-- landmark-nomic: `/home/kyungmin/vectordb/hnsw-playground/datasets/landmark-nomic-768-angular.hdf5`
-- msmarco: `/home/kyungmin/vectordb/hnsw-playground/datasets/msmarco-v1-openai-ada2-full-ip.hdf5`
+- Root: `$SAGE_DATA_DIR`
+- agnews: `$SAGE_DATA_DIR/agnews-mxbai-1024-euclidean.hdf5`
+- cohere: `$SAGE_DATA_DIR/cohere-768-angular.hdf5`
+- landmark-nomic: `$SAGE_DATA_DIR/landmark-nomic-768-angular.hdf5`
+- msmarco: `$SAGE_DATA_DIR/msmarco-v1-openai-ada2-full-ip.hdf5`
 
 Default DARTH output root:
 
-- `/home/kyungmin/vectordb/hnsw-playground/index/darth_m32_efc500_target099_main4_20260728`
-- Resolved target on this machine: `/home/smrc/samsung-nvme/kyungmin/index/darth_m32_efc500_target099_main4_20260728`
+- `$SAGE_INDEX_DIR/darth_m32_efc500_target099_main4_20260728`
+- Resolved target on this machine: `$SAGE_INDEX_DIR/darth_m32_efc500_target099_main4_20260728`
 
 Planned DARTH settings:
 
@@ -118,8 +118,8 @@ Planned DARTH settings:
 
 Verified reusable FAISS index root:
 
-- `/home/kyungmin/vectordb/hnsw-playground/index/faiss_m32_efc500_main8_20260707/darth/index`
-- Resolved target on this machine: `/home/smrc/samsung-nvme/kyungmin/index/faiss_m32_efc500_main8_20260707/darth/index`
+- `$SAGE_FAISS_INDEX_ROOT`
+- Resolved target on this machine: `$SAGE_FAISS_INDEX_ROOT`
 
 Verified reusable index files:
 

@@ -4,8 +4,8 @@
 
 - Use `benchmarking-darth` as the runnable DARTH comparison pipeline.
 - Keep shared storage:
-  - processed datasets: `/home/kyungmin/vectordb/hnsw-playground/datasets/processed/DARTH`
-  - indexes: `/home/kyungmin/vectordb/hnsw-playground/index/DARTH`
+  - processed datasets: `$SAGE_ROOT/datasets/processed/DARTH`
+  - indexes: `$SAGE_ROOT/index/DARTH`
 - `benchmarking-darth/datasets/processed` already points to the shared dataset root.
 - `benchmarking-darth/hnsw-index` already points to the shared index root.
 - `benchmarking-darth` HNSW runner now supports both `IP` and `L2`, so `gist` and `agnews` can be included in the same pipeline.
@@ -84,9 +84,9 @@
 ## Output Convention To Use
 
 - training logs:
-  - `/home/kyungmin/vectordb/hnsw-playground/index/DARTH/et_training_data/...`
+  - `$SAGE_ROOT/index/DARTH/et_training_data/...`
 - interval summaries:
-  - `/home/kyungmin/vectordb/hnsw-playground/index/DARTH/intervals/...`
+  - `$SAGE_ROOT/index/DARTH/intervals/...`
 
 ## Important Notes
 

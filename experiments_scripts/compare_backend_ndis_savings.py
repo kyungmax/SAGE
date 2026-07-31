@@ -25,8 +25,9 @@ import pandas as pd
 
 HERE = Path(__file__).resolve().parent
 OURS_ROOT = HERE.parent
-DEFAULT_HNSWLIB_ROOT = Path('/home/kyungmin/vectordb/hnswlib')
-DEFAULT_FAISS_PYTHON = Path('/home/kyungmin/vectordb/faiss/build_hnsw_py312/faiss/python')
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_HNSWLIB_ROOT = Path(os.environ.get('SAGE_HNSWLIB_EXTENSION_ROOT', str(REPO_ROOT / 'hnswlib'))).expanduser()
+DEFAULT_FAISS_PYTHON = Path(os.environ.get('FAISS_PYTHON_PATH', str(REPO_ROOT / 'faiss/build_sage_avx512/faiss/python'))).expanduser()
 DEFAULT_FAISS_WRAPPER = HERE / 'faiss'
 DEFAULT_OUT = OURS_ROOT / 'final_analysis' / 'backend_ndis_savings'
 DEFAULT_HNSWLIB_SWEEP = (

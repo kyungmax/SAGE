@@ -22,8 +22,9 @@ ROOT = SCRIPT_PATH.parents[1]
 REPO_ROOT = SCRIPT_PATH.parents[3]
 EXPERIMENTS_ROOT = REPO_ROOT / "experiments_scripts"
 FAISS_IMPL_ROOT = EXPERIMENTS_ROOT / "faiss"
-DEFAULT_LEGACY_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground")
-DEFAULT_PROJECT_ROOT = Path(os.environ.get("HNSW_PLAYGROUND_ROOT", str(DEFAULT_LEGACY_ROOT))).expanduser()
+DEFAULT_PROJECT_ROOT = Path(
+    os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))
+).expanduser()
 DEFAULT_DATASET_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
 DEFAULT_INDEX_ROOT = Path(
     os.environ.get(
@@ -32,10 +33,7 @@ DEFAULT_INDEX_ROOT = Path(
     )
 ).expanduser()
 DEFAULT_FAISS_PYTHON_PATH = Path(
-    os.environ.get(
-        "FAISS_PYTHON_PATH",
-        "/home/kyungmin/vectordb/faiss/build_hnsw_py312_avx512/faiss/python",
-    )
+    os.environ.get("FAISS_PYTHON_PATH", str(REPO_ROOT / "faiss/build_sage_avx512/faiss/python"))
 ).expanduser()
 
 DATASETS = (
@@ -262,7 +260,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(" ".join(runner_argv))
         return 0
 
-    os.environ.setdefault("HNSW_PLAYGROUND_ROOT", str(DEFAULT_PROJECT_ROOT))
+    os.environ.setdefault("SAGE_PROJECT_ROOT", str(DEFAULT_PROJECT_ROOT))
     os.environ.setdefault("FAISS_OPT_LEVEL", "AVX512")
     os.environ["FAISS_PYTHON_PATH"] = str(Path(args.faiss_python_path).expanduser().resolve())
     for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):

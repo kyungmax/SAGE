@@ -16,7 +16,7 @@ Imported scope:
 Run:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/06_better_index_quality
+cd $SAGE_PROJECT_ROOT/final_experiments/06_better_index_quality
 python3 run_faiss_simd_ndis_ef1024.py   --policy-csv /path/to/combined_faiss_main_qps_latency_sweep.csv   --m32-index-root /path/to/faiss_m32_efc500_main8_20260707/darth/index   --index-root-base /path/to/faiss_graph_quality_ndis/darth/index   --build-missing-indexes
 ```
 

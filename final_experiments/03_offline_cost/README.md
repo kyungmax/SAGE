@@ -16,21 +16,21 @@ Imported scope:
 Run FAISS:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/03_offline_cost
+cd $SAGE_PROJECT_ROOT/final_experiments/03_offline_cost
 ./run_faiss_simd_24t.sh
 ```
 
 Run hnswlib:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/03_offline_cost
+cd $SAGE_PROJECT_ROOT/final_experiments/03_offline_cost
 ./run_hnswlib_simd_24t.sh
 ```
 
 Run both:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/03_offline_cost
+cd $SAGE_PROJECT_ROOT/final_experiments/03_offline_cost
 ./run_all_simd_24t.sh
 ```
 

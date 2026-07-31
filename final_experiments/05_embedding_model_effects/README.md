@@ -27,7 +27,7 @@ marco_embeddings/msmarco-v1-embeddinggemma-300m-fp32-dev6980-ip.hdf5
 Run a preflight check before the full sweep:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/05_embedding_model_effects
+cd $SAGE_PROJECT_ROOT/final_experiments/05_embedding_model_effects
 python3 scripts/preflight_msmarco_embedding_models.py
 ```
 
@@ -36,7 +36,7 @@ Missing HDF5 files must be prepared before running. Missing FAISS indexes are ac
 Run the five-model FAISS sweep:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/05_embedding_model_effects
+cd $SAGE_PROJECT_ROOT/final_experiments/05_embedding_model_effects
 export OUT_ROOT=$PWD/msmarco_embedding_models_faiss_SIMD_on_24t
 ./run_msmarco_embedding_models_faiss_24t.sh
 ```

@@ -29,8 +29,9 @@ REPO_ROOT = SCRIPT_PATH.parents[3]
 EXPERIMENTS_ROOT = REPO_ROOT / "experiments_scripts"
 FAISS_IMPL_ROOT = EXPERIMENTS_ROOT / "faiss"
 HNSW_IMPL_ROOT = EXPERIMENTS_ROOT / "hnswlib"
-DEFAULT_LEGACY_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground")
-DEFAULT_PROJECT_ROOT = Path(os.environ.get("HNSW_PLAYGROUND_ROOT", str(DEFAULT_LEGACY_ROOT))).expanduser()
+DEFAULT_PROJECT_ROOT = Path(
+    os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))
+).expanduser()
 DEFAULT_DATA_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
 DEFAULT_HNSW_INDEX_DIR = Path(os.environ.get("SAGE_INDEX_DIR", str(DEFAULT_PROJECT_ROOT / "index"))).expanduser()
 DEFAULT_FAISS_INDEX_ROOT = Path(
@@ -40,7 +41,7 @@ DEFAULT_FAISS_INDEX_ROOT = Path(
     )
 ).expanduser()
 DEFAULT_HNSWLIB_EXTENSION_ROOT = Path(
-    os.environ.get("SAGE_HNSWLIB_EXTENSION_ROOT", str(REPO_ROOT.parent / "hnswlib"))
+    os.environ.get("SAGE_HNSWLIB_EXTENSION_ROOT", str(REPO_ROOT / "hnswlib"))
 ).expanduser()
 
 
@@ -55,8 +56,6 @@ DEFAULT_FAISS_PYTHON_PATH = _first_existing_path(
     (
         Path(os.environ["FAISS_PYTHON_PATH"]) if os.environ.get("FAISS_PYTHON_PATH") else REPO_ROOT / "faiss/build_sage_avx512/faiss/python",
         REPO_ROOT / "faiss/build_sage_avx512/faiss/python",
-        Path("/home/kyungmin/vectordb/faiss/build_hnsw_py312_avx512/faiss/python"),
-        Path("/home/kyungmin/vectordb/faiss/build_hnsw_py312/faiss/python"),
     )
 )
 
@@ -315,7 +314,7 @@ def configure_backend(args: argparse.Namespace) -> None:
         BACKEND_BUILD_OR_LOAD_INDEX = module.build_original_index
         return
 
-    os.environ.setdefault("HNSW_PLAYGROUND_ROOT", str(DEFAULT_PROJECT_ROOT))
+    os.environ.setdefault("SAGE_PROJECT_ROOT", str(DEFAULT_PROJECT_ROOT))
     os.environ.setdefault("FAISS_OPT_LEVEL", "AVX512")
     os.environ["FAISS_PYTHON_PATH"] = str(Path(args.faiss_python_path).expanduser().resolve())
     os.environ["FAISS_INDEX_ROOT"] = str(Path(args.faiss_index_root).expanduser().resolve())
@@ -962,7 +961,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    os.environ.setdefault("HNSW_PLAYGROUND_ROOT", str(DEFAULT_PROJECT_ROOT))
+    os.environ.setdefault("SAGE_PROJECT_ROOT", str(DEFAULT_PROJECT_ROOT))
     os.environ.setdefault("FAISS_OPT_LEVEL", "AVX512")
     for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
         os.environ[name] = str(int(args.offline_num_threads))

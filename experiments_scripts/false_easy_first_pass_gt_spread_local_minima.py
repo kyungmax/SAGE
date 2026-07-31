@@ -17,19 +17,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-LOCAL_HNSWLIB = Path("/home/kyungmin/vectordb/hnswlib")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+LOCAL_HNSWLIB = Path(os.environ.get("SAGE_HNSWLIB_EXTENSION_ROOT", str(REPO_ROOT / "hnswlib"))).expanduser()
 if str(LOCAL_HNSWLIB) not in sys.path:
     sys.path.insert(0, str(LOCAL_HNSWLIB))
 
 import hnswlib  # noqa: E402
 
 
-DEFAULT_FALSE_EASY_DIR = Path(
-    "/home/kyungmin/vectordb/hnsw-playground/trials_on_fixing_search_process/"
-    "adaptive_efsearch/papers/ours/final_analysis/false_easy_analysis"
-)
-DEFAULT_DATASET_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground/datasets")
-DEFAULT_INDEX_DIR = Path("/home/kyungmin/vectordb/hnsw-playground/index")
+DEFAULT_FALSE_EASY_DIR = REPO_ROOT / "final_analysis/false_easy_analysis"
+DEFAULT_DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(REPO_ROOT / "datasets"))).expanduser()
+DEFAULT_INDEX_DIR = Path(os.environ.get("SAGE_INDEX_DIR", str(REPO_ROOT / "index"))).expanduser()
 DEFAULT_OUTPUT_DIR = DEFAULT_FALSE_EASY_DIR / "first_pass_gt_spread_local_minima_20260622"
 
 CLASSIFY_START = 4

@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$ROOT/../.." && pwd)"
-PY="${SAGE_PYTHON:-/home/kyungmin/anaconda3/envs/hnsw/bin/python3}"
+REPO_ROOT="$(cd "${SAGE_PROJECT_ROOT:-$ROOT/../..}" && pwd)"
+PY="${SAGE_PYTHON:-python3}"
 
 DATASETS="${SAGE_DRILLDOWN_DATASETS:-glove-100-angular.hdf5,nytimes-256-angular.hdf5,msmarco-v1-openai-ada2-full-ip.hdf5,msspacev-100M-i8-euclidean.hdf5,cohere-768-angular.hdf5,youtube-15M-angular.hdf5,agnews-mxbai-1024-euclidean.hdf5,landmark-nomic-768-angular.hdf5}"
 ANALYSIS_DATASETS="${SAGE_ANALYSIS_DATASETS:-glove-100-angular,nytimes-256-angular,msmarco-v1-openai-ada2-full-ip,msspacev-100M-i8-euclidean,cohere-768-angular,youtube-15M-angular,agnews-mxbai-1024-euclidean,landmark-nomic-768-angular}"
@@ -11,8 +11,8 @@ EFS="${SAGE_DRILLDOWN_EFS:-1024}"
 CAL_EFS="64,80,96,128,160,192,256,320,384,512,640,768,896,1024"
 RUN_ID="${SAGE_RUN_ID:-drilldown_faiss_SIMD_on_main8_24t}"
 
-DATA_DIR="${SAGE_DATA_DIR:-$REPO_ROOT/../hnsw-playground/datasets}"
-INDEX_DIR="${SAGE_INDEX_DIR:-$REPO_ROOT/../hnsw-playground/index}"
+DATA_DIR="${SAGE_DATA_DIR:-$REPO_ROOT/datasets}"
+INDEX_DIR="${SAGE_INDEX_DIR:-$REPO_ROOT/index}"
 FAISS_PYTHON="${FAISS_PYTHON_PATH:-$REPO_ROOT/faiss/build_sage_avx512/faiss/python}"
 FAISS_INDEX="${SAGE_FAISS_INDEX_ROOT:-${FAISS_INDEX_ROOT:-$INDEX_DIR/faiss_m32_efc500_main8_20260707/darth/index}}"
 

@@ -27,7 +27,7 @@ Paper ablation cells:
 Run a preflight check:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/04_ablation_study
+cd $SAGE_PROJECT_ROOT/final_experiments/04_ablation_study
 python3 scripts/preflight_faiss_glove_cohere_ablation.py
 ```
 
@@ -36,7 +36,7 @@ Missing HDF5 files must be prepared before running. Missing FAISS indexes are ac
 Run the parameter-sensitivity ablation:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/04_ablation_study
+cd $SAGE_PROJECT_ROOT/final_experiments/04_ablation_study
 export OUT_ROOT=$PWD/sage_ablation_faiss_glove_cohere_24t_m32_efc500_ef1024
 ./run_faiss_glove_cohere_ablation_24t.sh
 ```
@@ -54,7 +54,7 @@ Primary outputs after running:
 Run the pseudo-GT vs exact-GT calibration check:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/04_ablation_study
+cd $SAGE_PROJECT_ROOT/final_experiments/04_ablation_study
 export PSEUDOGT_OUT_DIR=$PWD/probe_pseudo_gt_vs_exact_glove_cohere_faiss_p100_ef4096
 ./run_faiss_glove_cohere_pseudogt_24t.sh
 ```

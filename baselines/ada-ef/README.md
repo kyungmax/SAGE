@@ -4,7 +4,7 @@ This directory vendors the Ada-EF/HNSW headers from `hnsw-ada-ef` and adds a sma
 
 ## Build
 
-External dependencies: CMake, a C++17 compiler, OpenMP, HDF5 C++ library, Eigen3, and Boost headers. On this machine, `scripts/build.sh` auto-detects `~/anaconda3/envs/adaef` when `CONDA_PREFIX` is not already set.
+External dependencies: CMake, a C++17 compiler, OpenMP, HDF5 C++ library, Eigen3, and Boost headers. Set `CONDA_PREFIX` only when these dependencies live in a specific conda environment; otherwise the build uses standard system locations.
 
 ```bash
 cd baselines/ada-ef
@@ -14,7 +14,7 @@ cd baselines/ada-ef
 Explicit env:
 
 ```bash
-CONDA_PREFIX=/home/kyungmin/anaconda3/envs/adaef ./scripts/build.sh
+CONDA_PREFIX=/path/to/adaef ./scripts/build.sh
 ```
 
 The binary is `build/backend_runner`.

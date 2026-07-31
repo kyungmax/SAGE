@@ -10,6 +10,12 @@ THIS_DIR = Path(__file__).resolve().parent
 BENCHMARKING_DARTH_ROOT = THIS_DIR.parent
 SNAPSHOT_ROOT = BENCHMARKING_DARTH_ROOT.parent
 
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "faiss").exists() and (parent / "experiments_scripts").exists():
+            return parent
+    return SNAPSHOT_ROOT
+
 
 def _resolve_path(path_value: str | None, default: Path) -> Path:
     if path_value:
@@ -22,7 +28,8 @@ def _default_darth_index_root() -> Path:
         return Path(os.environ["DARTH_INDEX_ROOT"])
     if os.environ.get("INDEX_ROOT"):
         return Path(os.environ["INDEX_ROOT"]) / "DARTH"
-    return Path("/home/kyungmin/vectordb/hnsw-playground/index/DARTH")
+    repo_root = _repo_root()
+    return Path(os.environ.get("DARTH_INDEX_ROOT", str(repo_root / "index/DARTH")))
 
 
 def _default_darth_dataset_root() -> Path:
@@ -30,7 +37,8 @@ def _default_darth_dataset_root() -> Path:
         return Path(os.environ["DARTH_DATASET_ROOT"])
     if os.environ.get("DATASETS_ROOT"):
         return Path(os.environ["DATASETS_ROOT"]) / "DARTH"
-    return Path("/home/kyungmin/vectordb/hnsw-playground/datasets/processed/DARTH")
+    repo_root = _repo_root()
+    return Path(os.environ.get("DARTH_DATASET_ROOT", str(repo_root / "datasets/processed/DARTH")))
 
 
 SHARED_INDEX_ROOT = _resolve_path(None, _default_darth_index_root())

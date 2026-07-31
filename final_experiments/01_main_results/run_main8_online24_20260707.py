@@ -26,12 +26,11 @@ OUT_ROOT = ROOT / "main8_online24"
 
 
 def _default_project_root() -> Path:
-    for key in ("HNSW_PLAYGROUND_ROOT", "SAGE_PROJECT_ROOT"):
+    for key in ("SAGE_PROJECT_ROOT",):
         value = os.environ.get(key)
         if value:
             return Path(value).expanduser().resolve()
-    legacy = Path("/home/kyungmin/vectordb/hnsw-playground")
-    return legacy if legacy.exists() else REPO_ROOT
+    return REPO_ROOT
 
 
 PROJECT_ROOT = _default_project_root()
@@ -50,11 +49,7 @@ FAISS_PYTHON_PATH = Path(
     os.environ.get("FAISS_PYTHON_PATH", str(REPO_ROOT / "faiss/build_sage_avx512/faiss/python"))
 ).expanduser()
 
-DEFAULT_PYTHON = Path("/home/kyungmin/anaconda3/envs/hnsw/bin/python3")
-CELL_PYTHON = os.environ.get(
-    "SAGE_PYTHON",
-    str(DEFAULT_PYTHON if DEFAULT_PYTHON.exists() else Path(sys.executable)),
-)
+CELL_PYTHON = os.environ.get("SAGE_PYTHON", str(Path(sys.executable)))
 
 DATASETS = (
     "glove-100-angular.hdf5",
@@ -134,7 +129,7 @@ def common_sweep_args(*, run_root: Path, final_dir: Path, datasets: Sequence[str
 
 
 def run_hnswlib_cell(*, datasets: Sequence[str], out_root: Path) -> int:
-    os.environ.setdefault("HNSW_PLAYGROUND_ROOT", str(PROJECT_ROOT))
+    os.environ.setdefault("SAGE_PROJECT_ROOT", str(PROJECT_ROOT))
     _prepend_path(HNSW_RUNNER_ROOT)
     _prepend_path(EXPERIMENTS_ROOT)
 
@@ -154,7 +149,7 @@ def run_hnswlib_cell(*, datasets: Sequence[str], out_root: Path) -> int:
 
 
 def run_faiss_cell(*, datasets: Sequence[str], out_root: Path, output_name: str = DEFAULT_FAISS_OUTPUT_NAME) -> int:
-    os.environ.setdefault("HNSW_PLAYGROUND_ROOT", str(PROJECT_ROOT))
+    os.environ.setdefault("SAGE_PROJECT_ROOT", str(PROJECT_ROOT))
     os.environ["FAISS_INDEX_ROOT"] = str(FAISS_INDEX_ROOT)
     os.environ["FAISS_PYTHON_PATH"] = str(FAISS_PYTHON_PATH)
     os.environ["FAISS_OPT_LEVEL"] = "AVX512"

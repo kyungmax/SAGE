@@ -1,9 +1,21 @@
+import os
+from pathlib import Path
+
+
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "faiss").exists() and (parent / "experiments_scripts").exists():
+            return parent
+    return Path(__file__).resolve().parent
+
+
+REPO_ROOT = _repo_root()
 # http://ann-benchmarks.com/glove-100-angular.hdf5
 
 import h5py
 import numpy as np
 
-GLOVE_DIR = "/mnt/hddhelp/mchatzakis/datasets/GLOVE100"
+GLOVE_DIR = str(Path(os.environ.get("DARTH_GLOVE_DIR", str(REPO_ROOT / "datasets/raw/DARTH/GLOVE100"))).expanduser())
 
 def write_ivecs(file_name, indices):
     with open(file_name, 'wb') as f:

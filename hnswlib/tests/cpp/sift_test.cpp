@@ -212,7 +212,6 @@ void sift_test() {
 
     HierarchicalNSW<float> appr_alg(&l2space, "hnswlib_sift", false);
     //HierarchicalNSW<float> appr_alg(&l2space, "D:/stuff/hnsw_lib/nmslib/similarity_search/release/temp",true);
-    //HierarchicalNSW<float> appr_alg(&l2space, "/mnt/d/stuff/hnsw_lib/nmslib/similarity_search/release/temp", true);
 
     //appr_alg_saved.saveIndex("d:\\hnsw-index.bin");
     //appr_alg_saved.loadIndex("d:\\hnsw-index2.bin", &l2space);

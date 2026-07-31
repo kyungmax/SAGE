@@ -1,5 +1,31 @@
 # Faiss
 
+## SAGE Artifact Notes
+
+This directory contains the patched FAISS source tree used by the SAGE artifact.
+Build paths are repository-relative. Set `SAGE_PROJECT_ROOT` only when you want
+to override the detected checkout root, and point experiment scripts at the
+built Python package with `FAISS_PYTHON_PATH`.
+
+```bash
+export SAGE_PROJECT_ROOT=/path/to/SAGE
+cd $SAGE_PROJECT_ROOT/faiss
+
+cmake -S . -B build_sage_avx512 \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DFAISS_ENABLE_GPU=OFF \
+    -DFAISS_ENABLE_PYTHON=ON \
+    -DFAISS_OPT_LEVEL=avx512 \
+    -DBUILD_TESTING=ON
+
+make -C build_sage_avx512 -j faiss_avx512
+make -C build_sage_avx512 -j swigfaiss
+
+export FAISS_PYTHON_PATH=$SAGE_PROJECT_ROOT/faiss/build_sage_avx512/faiss/python
+```
+
+The original upstream FAISS README follows.
+
 Faiss is a library for efficient similarity search and clustering of dense vectors. It contains algorithms that search in sets of vectors of any size, up to ones that possibly do not fit in RAM. It also contains supporting code for evaluation and parameter tuning. Faiss is written in C++ with complete wrappers for Python/numpy. Some of the most useful algorithms are implemented on the GPU. It is developed primarily at Meta's [Fundamental AI Research](https://ai.facebook.com/) group.
 
 ## News

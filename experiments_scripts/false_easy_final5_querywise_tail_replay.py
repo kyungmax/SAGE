@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 import time
 from pathlib import Path
@@ -21,8 +22,8 @@ import false_easy_first_pass_gt_spread_local_minima as first_pass  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DATASET_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground/datasets")
-INDEX_DIR = Path("/home/kyungmin/vectordb/hnsw-playground/index")
+DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(ROOT / "datasets"))).expanduser()
+INDEX_DIR = Path(os.environ.get("SAGE_INDEX_DIR", str(ROOT / "index"))).expanduser()
 OUTPUT_DIR = ROOT / "final_analysis/false_easy_analysis/final5_querywise_tail_replay_20260623"
 DEFAULT_DATASETS = (
     "cohere-768-angular",

@@ -47,9 +47,11 @@ through `knn_query_adaptive_light`.
 - `plots/` -- plot-only scripts and gnuplot templates.
 - `docs/` -- artifact notes, troubleshooting, and dataset/index instructions.
 
-> **Artifact status:** this README is the submission-facing draft. `TODO`
-> entries mark information that should be filled before artifact packaging
-> (public data links, checksums, exact figure numbers, and citation metadata).
+> **Artifact packaging model:** modified research code is included in this
+> repository (`faiss/`, `hnswlib/`, `rabitq/`, `experiments_scripts/ada-ef`,
+> `experiments_scripts/darth`, and `baselines/`). Standard system/Python
+> dependencies such as LightGBM, OpenBLAS, HDF5, Eigen, Boost, CMake, and
+> plotting packages are installed or downloaded by the documented setup steps.
 
 ## Hardware Configuration
 
@@ -86,8 +88,8 @@ optimized CPU path; AVX-512 is recommended on matching hardware.
 ### FAISS
 
 ```bash
-export SAGE_ROOT=/path/to/sage
-cd $SAGE_ROOT/faiss
+export SAGE_PROJECT_ROOT=$(pwd)
+cd $SAGE_PROJECT_ROOT/faiss
 
 cmake -S . -B build_sage_avx512 \
     -DCMAKE_BUILD_TYPE=Release \
@@ -107,7 +109,7 @@ If you do not install the package into the active environment, point the
 experiment scripts to the built Python package:
 
 ```bash
-export FAISS_PYTHON_PATH=$SAGE_ROOT/faiss/build_sage_avx512/faiss/python
+export FAISS_PYTHON_PATH=$SAGE_PROJECT_ROOT/faiss/build_sage_avx512/faiss/python
 ```
 
 Sanity check:
@@ -128,17 +130,23 @@ The hnswlib implementation is used for cross-backend validation and for
 comparisons against the FAISS implementation.
 
 ```bash
-cd $SAGE_ROOT/hnswlib
+cd $SAGE_PROJECT_ROOT/hnswlib
 python3 -m pip install -e .
 ```
 
 ## Data and Indexes
 
-Set the dataset and index roots before running experiments:
+By default the scripts detect the repository root from their location, then look for
+datasets under `<repo>/datasets` and indexes under `<repo>/index`. Set
+`SAGE_PROJECT_ROOT` only when you want to override the detected repository root;
+set explicit data/index roots for large artifact storage outside the git checkout:
 
 ```bash
-export SAGE_DATA_DIR=/path/to/datasets
-export SAGE_INDEX_DIR=/path/to/index/faiss_m32_efc500_main8_20260707/darth/index
+export SAGE_PROJECT_ROOT=/path/to/SAGE
+export SAGE_DATA_DIR=$SAGE_PROJECT_ROOT/datasets
+export SAGE_INDEX_DIR=$SAGE_PROJECT_ROOT/index
+export SAGE_FAISS_INDEX_ROOT=$SAGE_INDEX_DIR/faiss_m32_efc500_main8_20260707/darth/index
+export SAGE_HNSWLIB_INDEX_ROOT=$SAGE_INDEX_DIR
 ```
 
 The main paper experiments use eight HDF5 datasets with `train`, `test`, and
@@ -201,13 +209,14 @@ TODO: replace `Paper result` labels with final VLDB figure/table numbers.
 ### Run the Main Eight-Dataset Sweep
 
 ```bash
-export SAGE_ROOT=/path/to/sage
-export SAGE_DATA_DIR=/path/to/datasets
-export SAGE_INDEX_DIR=/path/to/hnswlib/index
-export SAGE_FAISS_INDEX_ROOT=/path/to/faiss_m32_efc500_main8_20260707/darth/index
-export FAISS_PYTHON_PATH=$SAGE_ROOT/faiss/build_sage_avx512/faiss/python
+export SAGE_PROJECT_ROOT=/path/to/SAGE
+export SAGE_DATA_DIR=$SAGE_PROJECT_ROOT/datasets
+export SAGE_INDEX_DIR=$SAGE_PROJECT_ROOT/index
+export SAGE_FAISS_INDEX_ROOT=$SAGE_INDEX_DIR/faiss_m32_efc500_main8_20260707/darth/index
+export SAGE_HNSWLIB_INDEX_ROOT=$SAGE_INDEX_DIR
+export FAISS_PYTHON_PATH=$SAGE_PROJECT_ROOT/faiss/build_sage_avx512/faiss/python
 
-cd $SAGE_ROOT/final_experiments/01_main_results
+cd $SAGE_PROJECT_ROOT/final_experiments/01_main_results
 python3 run_main8_online24_20260707.py run-all \
     --out-root main8_online24
 ```
@@ -243,7 +252,7 @@ final_experiments/01_main_results/main8_online24/{faiss,hnswlib}/final/offline_p
 ### Build the Combined Main Plot
 
 ```bash
-cd $SAGE_ROOT/final_experiments/01_main_results/main8_online24/combined_faiss_SIMD
+cd $SAGE_PROJECT_ROOT/final_experiments/01_main_results/main8_online24/combined_faiss_SIMD
 gnuplot main8_recall_total_time_faiss_SIMD_smoothed_plot_ready.gp
 ```
 
@@ -254,7 +263,7 @@ TODO: wire the final all8 plot-only wrapper into `plots/`.
 ### Difficulty Drill-Down
 
 ```bash
-cd $SAGE_ROOT/final_experiments/02_drill_down
+cd $SAGE_PROJECT_ROOT/final_experiments/02_drill_down
 ./run_faiss_simd_24t.sh
 ```
 
@@ -268,7 +277,7 @@ Primary outputs include:
 ### Offline Calibration Cost
 
 ```bash
-cd $SAGE_ROOT/final_experiments/03_offline_cost
+cd $SAGE_PROJECT_ROOT/final_experiments/03_offline_cost
 ./run_all_simd_24t.sh
 ```
 
@@ -286,7 +295,7 @@ Primary outputs:
 ### Ablation Study
 
 ```bash
-cd $SAGE_ROOT/final_experiments/04_ablation_study
+cd $SAGE_PROJECT_ROOT/final_experiments/04_ablation_study
 python3 scripts/preflight_faiss_glove_cohere_ablation.py
 export OUT_ROOT=$PWD/sage_ablation_faiss_glove_cohere_24t_m32_efc500_ef1024
 ./run_faiss_glove_cohere_ablation_24t.sh
@@ -301,7 +310,7 @@ This reproduces the FAISS paper ablation on `glove-100-angular.hdf5` and `cohere
 This study evaluates the same MSMARCO passage/query corpus under five embedding spaces: mean-pooled GloVe, mean-pooled FastText, OpenAI ada-002, BGE-M3, and EmbeddingGemma-300M. Each HDF5 must contain exact ground truth for its own embedding space.
 
 ```bash
-cd $SAGE_ROOT/final_experiments/05_embedding_model_effects
+cd $SAGE_PROJECT_ROOT/final_experiments/05_embedding_model_effects
 export OUT_ROOT=$PWD/msmarco_embedding_models_faiss_SIMD_on_24t
 python3 scripts/preflight_msmarco_embedding_models.py
 ./run_msmarco_embedding_models_faiss_24t.sh
@@ -313,7 +322,7 @@ The runner uses FAISS, SIMD on, 24 offline/online threads, `M=32`, `efConstructi
 ### Index Quality
 
 ```bash
-cd $SAGE_ROOT/final_experiments/06_better_index_quality
+cd $SAGE_PROJECT_ROOT/final_experiments/06_better_index_quality
 python3 run_faiss_simd_ndis_ef1024.py \
     --policy-csv /path/to/combined_faiss_main_qps_latency_sweep.csv \
     --build-missing-indexes
@@ -324,7 +333,7 @@ This study records FAISS SIMD-on distance-computation reduction and recall loss,
 ### DARTH / Ada-EF Target-0.99
 
 ```bash
-cd $SAGE_ROOT/final_experiments/07_darth_ada-ef
+cd $SAGE_PROJECT_ROOT/final_experiments/07_darth_ada-ef
 python3 scripts/preflight_darth_adaef_cohere_msmarco.py
 ./run_darth_adaef_cohere_msmarco_simd_target099.sh
 ```
@@ -349,21 +358,23 @@ used by the plot; the main8 wrapper reruns the SAGE and vanilla HNSW cells.
 From-scratch target-0.99 baseline rerun scripts are in `final_experiments/07_darth_ada-ef/`.
 Lower-level wrappers are preserved under `experiments_scripts/ada-ef/` and
 `experiments_scripts/darth/`. Source-only DARTH and Ada-EF baseline code lives under
-`baselines/`; see `baselines/README.md` for provenance and build commands.
+`baselines/`; see `baselines/README.md` for provenance and build commands. The
+baseline wrappers default to the local source trees and build outputs in this
+repository; use `SAGE_DARTH_*` or `SAGE_ADAEF_*` only to override those paths.
 
 ## Plotting Only
 
 Regenerate the main combined plot from existing CSV/JSON outputs:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/01_main_results/main8_online24/combined_faiss_SIMD
+cd $SAGE_PROJECT_ROOT/final_experiments/01_main_results/main8_online24/combined_faiss_SIMD
 gnuplot main8_recall_total_time_faiss_SIMD_smoothed_plot_ready.gp
 ```
 
 Regenerate FAISS analysis figures:
 
 ```bash
-cd $SAGE_ROOT
+cd $SAGE_PROJECT_ROOT
 python3 final_analysis/regenerate_faiss_01_02.py
 ```
 

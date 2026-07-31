@@ -6,13 +6,15 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(os.environ.get("HNSW_PLAYGROUND_ROOT", "/home/kyungmin/vectordb/hnsw-playground")).expanduser()
-EFFECTS_DIR = PROJECT_ROOT / "trials_on_fixing_search_process/adaptive_efsearch/papers/ours/final_experiments/05_embedding_model_effects"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))).expanduser()
+EFFECTS_DIR = REPO_ROOT / "final_experiments/05_embedding_model_effects"
 DATASET_DIR = PROJECT_ROOT / "datasets"
-PYTHON = Path(os.environ.get("SAGE_PYTHON", "/home/kyungmin/anaconda3/envs/hnsw/bin/python3")).expanduser()
+PYTHON = Path(os.environ.get("SAGE_PYTHON", sys.executable)).expanduser()
 
 DEFAULT_COLLECTION_TSV = DATASET_DIR / "msmarco_passage_glove_static/raw/collection.tsv"
 DEFAULT_QUERIES_TSV = DATASET_DIR / "msmarco_passage_glove_static/raw/queries.dev.tsv"

@@ -1,12 +1,23 @@
 import os
+from pathlib import Path
 import time
 import subprocess
 import json
 import pandas as pd
 import numpy as np
 
-INDEX_DIRECTORY = "/home/mchatzakis/hnsw-index"
-DATASET_DIRECTORY = "/data/mchatzakis/datasets/processed/"
+
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "faiss").exists() and (parent / "experiments_scripts").exists():
+            return parent
+    return Path(__file__).resolve().parent
+
+
+REPO_ROOT = _repo_root()
+
+INDEX_DIRECTORY = str(Path(os.environ.get("DARTH_HNSW_INDEX_ROOT", str(REPO_ROOT / "index/DARTH/hnsw-index"))).expanduser())
+DATASET_DIRECTORY = str(Path(os.environ.get("DARTH_DATASET_ROOT", str(REPO_ROOT / "datasets/processed/DARTH"))).expanduser())
 
 dataset_info = {
         "SIFT100M":{

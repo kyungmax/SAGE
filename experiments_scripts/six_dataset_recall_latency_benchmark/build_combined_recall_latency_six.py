@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 from pathlib import Path
 from typing import Iterable
 
@@ -29,8 +30,24 @@ SCRIPT_PATH = Path(__file__).resolve()
 EXPERIMENTS_SCRIPT_ROOT = next(
     parent for parent in SCRIPT_PATH.parents if parent.name == "experiments_scripts"
 )
-SAGE_ROOT = EXPERIMENTS_SCRIPT_ROOT.parent
-EXPERIMENT_ROOT = SAGE_ROOT / "final_experiments" / "combined_recall_latency_six_m32_efc500"
+DETECTED_PROJECT_ROOT = EXPERIMENTS_SCRIPT_ROOT.parent
+
+
+def _find_default_project_root() -> Path:
+    env_root = os.environ.get("SAGE_PROJECT_ROOT")
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+    for candidate in (DETECTED_PROJECT_ROOT, *DETECTED_PROJECT_ROOT.parents):
+        if (candidate / ".git").exists() or (
+            (candidate / "experiments_scripts").is_dir()
+            and (candidate / "final_experiments").is_dir()
+        ):
+            return candidate
+    return DETECTED_PROJECT_ROOT
+
+
+PROJECT_ROOT = _find_default_project_root()
+EXPERIMENT_ROOT = PROJECT_ROOT / "final_experiments" / "combined_recall_latency_six_m32_efc500"
 DEFAULT_HNSW_CSV = (
     EXPERIMENT_ROOT
     / "hnswlib_main_qps_latency_total6_m32_efc500_ncal100_offline24_online1"

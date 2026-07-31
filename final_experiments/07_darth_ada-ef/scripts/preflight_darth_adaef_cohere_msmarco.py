@@ -11,7 +11,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 EXP_ROOT = SCRIPT_DIR.parent
 REPO_ROOT = EXP_ROOT.parents[1]
-DEFAULT_PROJECT_ROOT = Path(os.environ.get("SAGE_PROJECT_ROOT", "/home/kyungmin/vectordb/hnsw-playground"))
+DEFAULT_PROJECT_ROOT = Path(os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))).expanduser()
 DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
 FAISS_INDEX_ROOT = Path(
     os.environ.get(
@@ -19,7 +19,12 @@ FAISS_INDEX_ROOT = Path(
         str(DEFAULT_PROJECT_ROOT / "index/faiss_m32_efc500_main8_20260707/darth/index"),
     )
 ).expanduser()
-HNSWLIB_INDEX_ROOT = Path(os.environ.get("SAGE_HNSWLIB_INDEX_ROOT", str(DEFAULT_PROJECT_ROOT / "index"))).expanduser()
+HNSWLIB_INDEX_ROOT = Path(
+    os.environ.get(
+        "SAGE_HNSWLIB_INDEX_ROOT",
+        os.environ.get("SAGE_INDEX_DIR", str(DEFAULT_PROJECT_ROOT / "index")),
+    )
+).expanduser()
 
 DARTH_SOURCE_ROOT = Path(
     os.environ.get("SAGE_DARTH_ROOT", str(REPO_ROOT / "baselines/darth/benchmarking-darth"))
