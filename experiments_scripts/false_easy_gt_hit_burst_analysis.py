@@ -20,7 +20,7 @@ import false_easy_first_pass_gt_spread_local_minima as first_pass  # noqa: E402
 
 
 DEFAULT_OUTPUT_DIR = (
-    first_pass.DEFAULT_FALSE_EASY_DIR / "first_pass_gt_spread_local_minima_20260622" / "gt_hit_burst_20260622"
+    first_pass.DEFAULT_FALSE_EASY_DIR / "first_pass_gt_spread_local_minima" / "gt_hit_burst"
 )
 WINDOWS = (8, 16, 32, 64, 128)
 
@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cohort-csv",
         type=Path,
-        default=first_pass.DEFAULT_FALSE_EASY_DIR / "hard_false_easy_chr_ratio_margins.csv",
+        default=first_pass.DEFAULT_FALSE_EASY_DIR / "hard_false_easy_cfr_ratio_margins.csv",
     )
     parser.add_argument("--dataset-root", type=Path, default=first_pass.DEFAULT_DATASET_ROOT)
     parser.add_argument("--index-dir", type=Path, default=first_pass.DEFAULT_INDEX_DIR)
@@ -228,8 +228,8 @@ def run_dataset(dataset: str, cohort_df: pd.DataFrame, args: argparse.Namespace)
                     "cohort": str(source["cohort"]),
                     "route": int(source["route"]),
                     "drop": float(source["drop"]),
-                    "classify_chr_mean": float(source["chr"]),
-                    "classify_chr_ratio": float(source["ratio"]),
+                    "classify_cfr_mean": float(source["cfr"]),
+                    "classify_cfr_ratio": float(source["ratio"]),
                     "feature_first_final_step": float(source["first_step"]),
                     "gt_k": int(args.k),
                     "trace_path_len": int(len(path)),

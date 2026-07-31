@@ -30,8 +30,7 @@ def _default_project_root() -> Path:
         value = os.environ.get(key)
         if value:
             return Path(value).expanduser().resolve()
-    legacy = Path("/home/kyungmin/vectordb/hnsw-playground")
-    return legacy if legacy.exists() else REPO_ROOT
+    return REPO_ROOT
 
 
 PROJECT_ROOT = _default_project_root()
@@ -50,11 +49,7 @@ FAISS_PYTHON_PATH = Path(
     os.environ.get("FAISS_PYTHON_PATH", str(REPO_ROOT / "faiss/build_sage_avx512/faiss/python"))
 ).expanduser()
 
-DEFAULT_PYTHON = Path("/home/kyungmin/anaconda3/envs/hnsw/bin/python3")
-CELL_PYTHON = os.environ.get(
-    "SAGE_PYTHON",
-    str(DEFAULT_PYTHON if DEFAULT_PYTHON.exists() else Path(sys.executable)),
-)
+CELL_PYTHON = os.environ.get("SAGE_PYTHON", str(Path(sys.executable)))
 
 DATASETS = (
     "glove-100-angular.hdf5",

@@ -13,7 +13,6 @@ import argparse
 import os
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Sequence
 
@@ -22,19 +21,20 @@ ROOT = SCRIPT_PATH.parents[1]
 REPO_ROOT = SCRIPT_PATH.parents[3]
 EXPERIMENTS_ROOT = REPO_ROOT / "experiments_scripts"
 FAISS_IMPL_ROOT = EXPERIMENTS_ROOT / "faiss"
-DEFAULT_LEGACY_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground")
-DEFAULT_PROJECT_ROOT = Path(os.environ.get("HNSW_PLAYGROUND_ROOT", str(DEFAULT_LEGACY_ROOT))).expanduser()
+DEFAULT_PROJECT_ROOT = Path(
+    os.environ.get("HNSW_PLAYGROUND_ROOT", os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT)))
+).expanduser()
 DEFAULT_DATASET_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
 DEFAULT_INDEX_ROOT = Path(
     os.environ.get(
         "SAGE_MSMARCO_EMBEDDING_FAISS_INDEX_ROOT",
-        str(DEFAULT_PROJECT_ROOT / "index/msmarco_embedding_models_faiss_m32_efc500_20260715/darth/index"),
+        str(DEFAULT_PROJECT_ROOT / "index/msmarco_embedding_models_faiss_m32_efc500/darth/index"),
     )
 ).expanduser()
 DEFAULT_FAISS_PYTHON_PATH = Path(
     os.environ.get(
         "FAISS_PYTHON_PATH",
-        "/home/kyungmin/vectordb/faiss/build_hnsw_py312_avx512/faiss/python",
+        str(REPO_ROOT / "faiss/build_sage_avx512/faiss/python"),
     )
 ).expanduser()
 
@@ -47,10 +47,6 @@ DATASETS = (
 )
 EF_SWEEP = "64,80,96,128,160,192,256,320,384,512,640,768,896,1024"
 BUILD_BATCH_SIZE = 32768
-
-
-def timestamp() -> str:
-    return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 def parse_dataset_list(value: str) -> str:
@@ -163,15 +159,15 @@ def install_build_on_miss_index_loader(final_index_utils, sweep_module, *, build
 
 
 def install_faiss_legacy_signature_compat(faiss_sage_index) -> None:
-    original_native_chr_summary = faiss_sage_index.Index._native_chr_summary
+    original_native_cfr_summary = faiss_sage_index.Index._native_cfr_summary
 
     def _uses_legacy_optional_kwarg(exc: TypeError) -> bool:
         message = str(exc)
         return "unexpected keyword argument" in message and (
-            "classify_start" in message or "classify_end" in message or "chr_ema_decay" in message
+            "classify_start" in message or "classify_end" in message or "cfr_ema_decay" in message
         )
 
-    def _native_chr_summary_compat(
+    def _native_cfr_summary_compat(
         self,
         data,
         *,
@@ -181,10 +177,10 @@ def install_faiss_legacy_signature_compat(faiss_sage_index) -> None:
         num_threads: int = -1,
         classify_start: int = 4,
         classify_end: int = 16,
-        chr_ema_decay: float = faiss_sage_index.CHR_EMA_DECAY,
+        cfr_ema_decay: float = faiss_sage_index.CFR_EMA_DECAY,
     ):
         try:
-            return original_native_chr_summary(
+            return original_native_cfr_summary(
                 self,
                 data,
                 k=int(k),
@@ -193,22 +189,22 @@ def install_faiss_legacy_signature_compat(faiss_sage_index) -> None:
                 num_threads=int(num_threads),
                 classify_start=int(classify_start),
                 classify_end=int(classify_end),
-                chr_ema_decay=float(chr_ema_decay),
+                cfr_ema_decay=float(cfr_ema_decay),
             )
         except TypeError as exc:
             if not _uses_legacy_optional_kwarg(exc):
                 raise
-            if int(classify_start) != 4 or int(classify_end) != 16 or abs(float(chr_ema_decay) - 0.8) > 1e-12:
+            if int(classify_start) != 4 or int(classify_end) != 16 or abs(float(cfr_ema_decay) - 0.8) > 1e-12:
                 raise RuntimeError(
-                    "Installed FAISS CHR summary binding lacks classify-window kwargs; fallback is valid only "
-                    "for classify_start=4, classify_end=16, chr_ema_decay=0.8."
+                    "Installed FAISS CFR summary binding lacks classify-window kwargs; fallback is valid only "
+                    "for classify_start=4, classify_end=16, cfr_ema_decay=0.8."
                 ) from exc
-            native_method = getattr(self._require_index(), "search_layer0_chr_summary", None)
+            native_method = getattr(self._require_index(), "search_layer0_cfr_summary", None)
             if native_method is None:
                 raise
-            if not getattr(self, "_legacy_chr_summary_signature_warned", False):
-                print("[FAISS] using legacy default-window search_layer0_chr_summary signature", flush=True)
-                self._legacy_chr_summary_signature_warned = True
+            if not getattr(self, "_legacy_cfr_summary_signature_warned", False):
+                print("[FAISS] using legacy default-window search_layer0_cfr_summary signature", flush=True)
+                self._legacy_cfr_summary_signature_warned = True
             vectors = self._prepare_vectors(data)
             return native_method(
                 vectors,
@@ -218,12 +214,12 @@ def install_faiss_legacy_signature_compat(faiss_sage_index) -> None:
                 num_threads=self._num_threads if int(num_threads) <= 0 else int(num_threads),
             )
 
-    faiss_sage_index.Index._native_chr_summary = _native_chr_summary_compat
+    faiss_sage_index.Index._native_cfr_summary = _native_cfr_summary_compat
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    out_root = args.out_root.expanduser() if args.out_root is not None else ROOT / f"msmarco_embedding_models_faiss_SIMD_on_24t_{timestamp()}"
+    out_root = args.out_root.expanduser() if args.out_root is not None else ROOT / "msmarco_embedding_models_faiss_SIMD_on_24t"
     out_root = out_root.resolve()
     index_root = Path(args.index_root).expanduser().resolve()
     base_path = Path(args.base_path).expanduser().resolve()

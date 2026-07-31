@@ -9,7 +9,7 @@ export OMP_NUM_THREADS=24
 export OPENBLAS_NUM_THREADS=24
 export MKL_NUM_THREADS=24
 export NUMEXPR_NUM_THREADS=24
-export FAISS_PYTHON_PATH="${FAISS_PYTHON_PATH:-/home/kyungmin/vectordb/faiss/build_hnsw_py312_avx512/faiss/python}"
+export FAISS_PYTHON_PATH="${FAISS_PYTHON_PATH:-$REPO_ROOT/faiss/build_sage_avx512/faiss/python}"
 
 exec "${SAGE_PYTHON:-python3}" "${SCRIPT_DIR}/scripts/run_offline_cost_24t_simd.py" \
   --backend faiss \

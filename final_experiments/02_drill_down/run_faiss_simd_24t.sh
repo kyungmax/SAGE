@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$ROOT/../.." && pwd)"
-PY="${SAGE_PYTHON:-/home/kyungmin/anaconda3/envs/hnsw/bin/python3}"
+PY="${SAGE_PYTHON:-python3}"
 
 DATASETS="${SAGE_DRILLDOWN_DATASETS:-glove-100-angular.hdf5,nytimes-256-angular.hdf5,msmarco-v1-openai-ada2-full-ip.hdf5,msspacev-100M-i8-euclidean.hdf5,cohere-768-angular.hdf5,youtube-15M-angular.hdf5,agnews-mxbai-1024-euclidean.hdf5,landmark-nomic-768-angular.hdf5}"
 ANALYSIS_DATASETS="${SAGE_ANALYSIS_DATASETS:-glove-100-angular,nytimes-256-angular,msmarco-v1-openai-ada2-full-ip,msspacev-100M-i8-euclidean,cohere-768-angular,youtube-15M-angular,agnews-mxbai-1024-euclidean,landmark-nomic-768-angular}"
@@ -11,8 +11,8 @@ EFS="${SAGE_DRILLDOWN_EFS:-1024}"
 CAL_EFS="64,80,96,128,160,192,256,320,384,512,640,768,896,1024"
 RUN_ID="${SAGE_RUN_ID:-drilldown_faiss_SIMD_on_main8_24t}"
 
-DATA_DIR="${SAGE_DATA_DIR:-$REPO_ROOT/../hnsw-playground/datasets}"
-INDEX_DIR="${SAGE_INDEX_DIR:-$REPO_ROOT/../hnsw-playground/index}"
+DATA_DIR="${SAGE_DATA_DIR:-$REPO_ROOT/datasets}"
+INDEX_DIR="${SAGE_INDEX_DIR:-$REPO_ROOT/index}"
 FAISS_PYTHON="${FAISS_PYTHON_PATH:-$REPO_ROOT/faiss/build_sage_avx512/faiss/python}"
 FAISS_INDEX="${SAGE_FAISS_INDEX_ROOT:-${FAISS_INDEX_ROOT:-$INDEX_DIR/faiss_m32_efc500_main8_20260707/darth/index}}"
 
@@ -22,7 +22,7 @@ HARD_DIR="$ROOT/$RUN_ID/hard_loss_querywise_exactgt_24t"
 LARGE_DIR="$ROOT/$RUN_ID/large_false_easy_drop_analysis"
 LOG_DIR="$ROOT/$RUN_ID/logs"
 mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/faiss_SIMD_on_24t_$(date +%Y%m%d_%H%M%S).log"
+LOG_FILE="$LOG_DIR/faiss_SIMD_on_24t.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 export FAISS_OPT_LEVEL="${FAISS_OPT_LEVEL:-AVX512}"
@@ -59,7 +59,7 @@ echo "[STEP] difficulty_exactgt_24t"
   --num-calibration-queries 100 \
   --classify-start 4 \
   --classify-end 16 \
-  --chr-ema-decay 0.8 \
+  --cfr-ema-decay 0.8 \
   --pair-gap 2 \
   --tmin-pops 25 \
   --mixed-threshold-mode paper_floor_half \
@@ -81,13 +81,13 @@ echo "[STEP] hard_loss_querywise_exactgt_24t"
   --num-threads 24 \
   --workers 24 \
   --batch-size 512 \
-  --chr-batch-size 2048 \
+  --cfr-batch-size 2048 \
   --param-m 32 \
   --ef-construction 500 \
   --tmin-pops 25 \
   --classify-start 4 \
   --classify-end 16 \
-  --chr-ema-decay 0.8
+  --cfr-ema-decay 0.8
 
 echo "[STEP] large_false_easy_drop_analysis"
 "$PY" scripts/analyze_large_false_easy_drops.py \

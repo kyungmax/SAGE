@@ -979,13 +979,13 @@ int search_from_candidates_adaptive_light(
             params.classify_start,
             params.classify_end);
     FAISS_THROW_IF_NOT_MSG(
-            std::isfinite(params.chr_ema_decay) &&
-                    params.chr_ema_decay >= 0.0f &&
-                    params.chr_ema_decay <= 1.0f,
-            "chr_ema_decay must be finite and lie in [0, 1]");
+            std::isfinite(params.cfr_ema_decay) &&
+                    params.cfr_ema_decay >= 0.0f &&
+                    params.cfr_ema_decay <= 1.0f,
+            "cfr_ema_decay must be finite and lie in [0, 1]");
     const int classify_start = params.classify_start;
     const int classify_end = params.classify_end;
-    const float cfr_ema_decay = params.chr_ema_decay;
+    const float cfr_ema_decay = params.cfr_ema_decay;
     const float cfr_ema_update = 1.0f - cfr_ema_decay;
 
     FAISS_THROW_IF_NOT_MSG(

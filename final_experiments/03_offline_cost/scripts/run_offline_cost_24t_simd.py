@@ -29,8 +29,9 @@ REPO_ROOT = SCRIPT_PATH.parents[3]
 EXPERIMENTS_ROOT = REPO_ROOT / "experiments_scripts"
 FAISS_IMPL_ROOT = EXPERIMENTS_ROOT / "faiss"
 HNSW_IMPL_ROOT = EXPERIMENTS_ROOT / "hnswlib"
-DEFAULT_LEGACY_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground")
-DEFAULT_PROJECT_ROOT = Path(os.environ.get("HNSW_PLAYGROUND_ROOT", str(DEFAULT_LEGACY_ROOT))).expanduser()
+DEFAULT_PROJECT_ROOT = Path(
+    os.environ.get("HNSW_PLAYGROUND_ROOT", os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT)))
+).expanduser()
 DEFAULT_DATA_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
 DEFAULT_HNSW_INDEX_DIR = Path(os.environ.get("SAGE_INDEX_DIR", str(DEFAULT_PROJECT_ROOT / "index"))).expanduser()
 DEFAULT_FAISS_INDEX_ROOT = Path(
@@ -55,8 +56,6 @@ DEFAULT_FAISS_PYTHON_PATH = _first_existing_path(
     (
         Path(os.environ["FAISS_PYTHON_PATH"]) if os.environ.get("FAISS_PYTHON_PATH") else REPO_ROOT / "faiss/build_sage_avx512/faiss/python",
         REPO_ROOT / "faiss/build_sage_avx512/faiss/python",
-        Path("/home/kyungmin/vectordb/faiss/build_hnsw_py312_avx512/faiss/python"),
-        Path("/home/kyungmin/vectordb/faiss/build_hnsw_py312/faiss/python"),
     )
 )
 
@@ -102,7 +101,7 @@ MIXED_BUCKET_COUNT = 4
 PAIR_GAP = 2
 CLASSIFY_START = 4
 CLASSIFY_END = 16
-CHR_EMA_DECAY = 0.8
+CFR_EMA_DECAY = 0.8
 
 BACKEND = ""
 BACKEND_LABEL = ""
@@ -153,7 +152,7 @@ FIELDNAMES = [
     "pair_gap",
     "classify_start",
     "classify_end",
-    "chr_ema_decay",
+    "cfr_ema_decay",
     "cache_path",
     "policy_source_label",
     "log_path",
@@ -352,7 +351,7 @@ def mixed_cache_context(args: argparse.Namespace) -> dict[str, Any]:
         "ablation_value": "default",
         "classify_start": int(args.classify_start),
         "classify_end": int(args.classify_end),
-        "chr_ema_decay": float(args.chr_ema_decay),
+        "cfr_ema_decay": float(args.cfr_ema_decay),
         "pair_gap": int(args.pair_gap),
     }
 
@@ -382,7 +381,7 @@ def resolve_mixed_policy_with_step_timings(
     mixed_bucket_count: int,
     classify_start: int,
     classify_end: int,
-    chr_ema_decay: float,
+    cfr_ema_decay: float,
     pair_gap: int,
     cache_context: dict[str, Any],
     emit=None,
@@ -425,7 +424,7 @@ def resolve_mixed_policy_with_step_timings(
         mixed_bucket_count=int(mixed_bucket_count),
         classify_start=int(classify_start),
         classify_end=int(classify_end),
-        chr_ema_decay=float(chr_ema_decay),
+        cfr_ema_decay=float(cfr_ema_decay),
         paper_floor_pair_gap=int(pair_gap),
         lid_sampling_mode="sampled",
         lid_sample_fraction=FIXED_CALIBRATION_SAMPLE_FRACTION,
@@ -531,7 +530,7 @@ def resolve_mixed_policy_with_step_timings(
     cfr_start = time.perf_counter()
     anchor_by_ef: dict[int, pd.DataFrame] = {}
     for config in configs:
-        anchor_by_ef[int(config.selection_ef)] = mixed_runtime._extract_chr_mean_by_query(
+        anchor_by_ef[int(config.selection_ef)] = mixed_runtime._extract_cfr_mean_by_query(
             index=index,
             selected_df=selected_df,
             query_vectors=query_vectors,
@@ -541,7 +540,7 @@ def resolve_mixed_policy_with_step_timings(
             k=int(k),
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
         )
     add_elapsed(measurements, "step3_cfr_distribution_wall_s", cfr_start)
 
@@ -555,12 +554,12 @@ def resolve_mixed_policy_with_step_timings(
     for config in configs:
         anchor_df = anchor_by_ef[int(config.selection_ef)]
         usable_mask = anchor_df["usable_for_mean_window_calibration"].astype(bool).to_numpy(dtype=bool)
-        anchor_chr_values = pd.to_numeric(
-            anchor_df.loc[usable_mask, "mean_smoothed_chr_classify_window"],
+        anchor_cfr_values = pd.to_numeric(
+            anchor_df.loc[usable_mask, "mean_smoothed_cfr_classify_window"],
             errors="coerce",
         ).to_numpy(dtype=float)
-        anchor_chr_values = anchor_chr_values[np.isfinite(anchor_chr_values)]
-        if anchor_chr_values.size == 0:
+        anchor_cfr_values = anchor_cfr_values[np.isfinite(anchor_cfr_values)]
+        if anchor_cfr_values.size == 0:
             raise RuntimeError(f"No usable calibration CFR values for selection_ef={int(config.selection_ef)}.")
 
         route_thetas: list[float] = []
@@ -571,7 +570,7 @@ def resolve_mixed_policy_with_step_timings(
                 np.mean(recall_cache[int(pair_target_ef)][usable_mask] + 1e-12 >= float(acceptable_recall_threshold))
             )
             route_theta = max(
-                mixed_runtime._quantile_theta(anchor_chr_values, acceptable_rate)
+                mixed_runtime._quantile_theta(anchor_cfr_values, acceptable_rate)
                 * mixed_runtime._threshold_scale_for_route_index(
                     route_index=route_index,
                     route_count=len(route_efs),
@@ -742,7 +741,7 @@ def run_dataset(args: argparse.Namespace, dataset: str, rows: list[dict[str, Any
                 mixed_bucket_count=int(args.mixed_bucket_count),
                 classify_start=int(args.classify_start),
                 classify_end=int(args.classify_end),
-                chr_ema_decay=float(args.chr_ema_decay),
+                cfr_ema_decay=float(args.cfr_ema_decay),
                 pair_gap=int(args.pair_gap),
                 cache_context=mixed_cache_context(args),
                 emit=emit,
@@ -813,7 +812,7 @@ def run_dataset(args: argparse.Namespace, dataset: str, rows: list[dict[str, Any
                 "pair_gap": int(args.pair_gap),
                 "classify_start": int(args.classify_start),
                 "classify_end": int(args.classify_end),
-                "chr_ema_decay": float(args.chr_ema_decay),
+                "cfr_ema_decay": float(args.cfr_ema_decay),
                 "cache_path": str(cache_path),
                 "policy_source_label": str(getattr(policy, "source_label", "")),
                 "log_path": str(log_path),
@@ -895,7 +894,7 @@ def write_manifest(args: argparse.Namespace) -> None:
             "pair_gap": int(args.pair_gap),
             "classify_start": int(args.classify_start),
             "classify_end": int(args.classify_end),
-            "chr_ema_decay": float(args.chr_ema_decay),
+            "cfr_ema_decay": float(args.cfr_ema_decay),
             "repeats": int(args.repeats),
         },
         "paths": {
@@ -939,7 +938,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--pair-gap", type=int, default=PAIR_GAP)
     parser.add_argument("--classify-start", type=int, default=CLASSIFY_START)
     parser.add_argument("--classify-end", type=int, default=CLASSIFY_END)
-    parser.add_argument("--chr-ema-decay", type=float, default=CHR_EMA_DECAY)
+    parser.add_argument("--cfr-ema-decay", type=float, default=CFR_EMA_DECAY)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--reuse-cache", action="store_true")
     parser.add_argument("--append", action="store_true")

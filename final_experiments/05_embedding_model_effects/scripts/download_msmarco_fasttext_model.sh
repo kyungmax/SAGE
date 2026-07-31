@@ -3,7 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-DATASET_DIR="${SAGE_DATA_DIR:-/home/kyungmin/vectordb/hnsw-playground/datasets}"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+DATASET_DIR="${SAGE_DATA_DIR:-$REPO_ROOT/datasets}"
 PYTHON="${SAGE_PYTHON:-python3}"
 FASTTEXT_URL="${FASTTEXT_URL:-https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/cc.en.300.bin.gz}"
 FASTTEXT_GZ="${FASTTEXT_GZ:-${DATASET_DIR}/msmarco_passage_fasttext_static/raw/cc.en.300.bin.gz}"

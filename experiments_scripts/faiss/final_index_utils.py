@@ -117,12 +117,7 @@ def maybe_reexec_in_conda_env(
     if os.environ.get("CONDA_DEFAULT_ENV") == target_env:
         return
 
-    default_conda_exe = Path("/home/kyungmin/anaconda3/bin/conda")
-    conda_exe = (
-        os.environ.get("CONDA_EXE")
-        or shutil.which("conda")
-        or (str(default_conda_exe) if default_conda_exe.exists() else None)
-    )
+    conda_exe = os.environ.get("CONDA_EXE") or shutil.which("conda")
     if not conda_exe:
         print(
             f"[FAISS] conda env {target_env!r} requested but conda executable was not found; "

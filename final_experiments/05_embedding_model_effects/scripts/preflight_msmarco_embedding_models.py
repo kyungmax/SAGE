@@ -10,11 +10,13 @@ from typing import Sequence
 
 import h5py
 
-DEFAULT_DATA_DIR = Path(os.environ.get("SAGE_DATA_DIR", "/home/kyungmin/vectordb/hnsw-playground/datasets")).expanduser()
+SCRIPT_PATH = Path(__file__).resolve()
+REPO_ROOT = SCRIPT_PATH.parents[3]
+DEFAULT_DATA_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(REPO_ROOT / "datasets"))).expanduser()
 DEFAULT_INDEX_ROOT = Path(
     os.environ.get(
         "SAGE_MSMARCO_EMBEDDING_FAISS_INDEX_ROOT",
-        "/home/kyungmin/vectordb/hnsw-playground/index/msmarco_embedding_models_faiss_m32_efc500_20260715/darth/index",
+        str(REPO_ROOT / "index/msmarco_embedding_models_faiss_m32_efc500/darth/index"),
     )
 ).expanduser()
 DATASETS = (

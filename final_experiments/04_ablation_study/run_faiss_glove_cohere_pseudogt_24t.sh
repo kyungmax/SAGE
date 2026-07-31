@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 OUT_DIR="${PSEUDOGT_OUT_DIR:-${SCRIPT_DIR}/probe_pseudo_gt_vs_exact_glove_cohere_faiss_p100_ef4096}"
 LOG_DIR="${OUT_DIR}/logs"
 LOG="${LOG_DIR}/run_faiss_glove_cohere_pseudogt_24t.log"
@@ -14,7 +15,7 @@ export OMP_NUM_THREADS=24
 export OPENBLAS_NUM_THREADS=24
 export MKL_NUM_THREADS=24
 export NUMEXPR_NUM_THREADS=24
-export FAISS_PYTHON_PATH="${FAISS_PYTHON_PATH:-/home/kyungmin/vectordb/faiss/build_hnsw_py312_avx512/faiss/python}"
+export FAISS_PYTHON_PATH="${FAISS_PYTHON_PATH:-$REPO_ROOT/faiss/build_sage_avx512/faiss/python}"
 
 cd "${SCRIPT_DIR}"
 

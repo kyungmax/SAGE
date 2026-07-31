@@ -31,7 +31,9 @@ import h5py
 import numpy as np
 
 
-DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", "/home/kyungmin/vectordb/hnsw-playground/datasets")).expanduser()
+SCRIPT_PATH = Path(__file__).resolve()
+REPO_ROOT = SCRIPT_PATH.parents[3]
+DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(REPO_ROOT / "datasets"))).expanduser()
 WORK_SUBDIR = "msmarco_passage_glove_static"
 COLLECTION_URL = "https://msmarco.z22.web.core.windows.net/msmarcoranking/collection.tar.gz"
 QUERIES_URL = "https://msmarco.z22.web.core.windows.net/msmarcoranking/queries.tar.gz"

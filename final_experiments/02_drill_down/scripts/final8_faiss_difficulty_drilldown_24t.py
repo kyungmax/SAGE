@@ -31,8 +31,7 @@ def _default_project_root() -> Path:
         value = os.environ.get(key)
         if value:
             return Path(value).expanduser().resolve()
-    legacy = Path("/home/kyungmin/vectordb/hnsw-playground")
-    return legacy if legacy.exists() else REPO_ROOT
+    return REPO_ROOT
 
 
 PROJECT_ROOT = _default_project_root()
@@ -111,7 +110,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mixed-bucket-count", type=int, default=4)
     parser.add_argument("--classify-start", type=int, default=4)
     parser.add_argument("--classify-end", type=int, default=16)
-    parser.add_argument("--chr-ema-decay", type=float, default=0.8)
+    parser.add_argument("--cfr-ema-decay", type=float, default=0.8)
     parser.add_argument("--pair-gap", type=int, default=2)
     parser.add_argument("--groups", default=",".join(GROUP_ORDER), help="Comma list of groups to benchmark: easy,medium,hard")
     parser.add_argument("--hard-stagnation", choices=("on", "off", "both"), default="off")
@@ -183,8 +182,8 @@ def dataset_stem(dataset: str) -> str:
 def configure_runtime(args: argparse.Namespace) -> None:
     projected_runtime.CLASSIFY_START = int(args.classify_start)
     projected_runtime.CLASSIFY_END = int(args.classify_end)
-    projected_runtime.CHR_EMA_DECAY = float(args.chr_ema_decay)
-    projected_runtime.CHR_EMA_UPDATE = 1.0 - float(args.chr_ema_decay)
+    projected_runtime.CFR_EMA_DECAY = float(args.cfr_ema_decay)
+    projected_runtime.CFR_EMA_UPDATE = 1.0 - float(args.cfr_ema_decay)
     projected_runtime.PAPER_FLOOR_PAIR_GAP = int(args.pair_gap)
 
 
@@ -561,7 +560,7 @@ def run_dataset(args: argparse.Namespace, dataset: str, all_query_groups: list[p
                 "calibration_cache_status": str(cache_status or ""),
                 "classify_start": int(args.classify_start),
                 "classify_end": int(args.classify_end),
-                "chr_ema_decay": float(args.chr_ema_decay),
+                "cfr_ema_decay": float(args.cfr_ema_decay),
                 "pair_gap": int(args.pair_gap),
                 "hard_stagnation_count": int(args.hard_stagnation_count),
             }

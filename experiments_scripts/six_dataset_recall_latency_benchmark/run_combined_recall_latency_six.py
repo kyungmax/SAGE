@@ -75,7 +75,7 @@ DEFAULT_FAISS_INDEX_ROOT = Path(
         str(PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603/darth/index"),
     )
 )
-DEFAULT_PYTHON = Path("/home/kyungmin/anaconda3/envs/hnsw/bin/python3")
+DEFAULT_PYTHON = Path(os.environ.get("SAGE_PYTHON", sys.executable))
 
 LATEST6_DATASETS = (
     "nytimes-256-angular.hdf5",

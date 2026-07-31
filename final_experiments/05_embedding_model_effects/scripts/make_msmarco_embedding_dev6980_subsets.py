@@ -21,7 +21,9 @@ import h5py
 import numpy as np
 
 
-DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", "/home/kyungmin/vectordb/hnsw-playground/datasets")).expanduser()
+SCRIPT_PATH = Path(__file__).resolve()
+REPO_ROOT = SCRIPT_PATH.parents[3]
+DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(REPO_ROOT / "datasets"))).expanduser()
 MARCO_EMBEDDING_DIR = DATASET_ROOT / "marco_embeddings"
 REFERENCE_QUERY_IDS = DATASET_ROOT / "msmarco-v1-openai-ada2-full-ip_query_ids.csv"
 

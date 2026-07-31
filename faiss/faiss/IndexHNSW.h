@@ -154,7 +154,7 @@ struct IndexHNSW : Index {
             float* top_3k_dists,
             const SearchParameters* params = nullptr) const;
 
-    void search_layer0_chr_summary(
+    void search_layer0_cfr_summary(
             idx_t n,
             const float* x,
             idx_t k,

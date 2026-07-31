@@ -22,7 +22,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 EXP_ROOT = SCRIPT_DIR.parent
 REPO_ROOT = EXP_ROOT.parents[1]
-DEFAULT_PROJECT_ROOT = Path(os.environ.get("SAGE_PROJECT_ROOT", "/home/kyungmin/vectordb/hnsw-playground"))
+DEFAULT_PROJECT_ROOT = Path(os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))).expanduser()
 DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
 INDEX_ROOT = Path(os.environ.get("SAGE_HNSWLIB_INDEX_ROOT", str(DEFAULT_PROJECT_ROOT / "index"))).expanduser()
 ADA_EF_ROOT = Path(os.environ.get("SAGE_ADAEF_ROOT", str(REPO_ROOT / "experiments_scripts/ada-ef"))).expanduser()

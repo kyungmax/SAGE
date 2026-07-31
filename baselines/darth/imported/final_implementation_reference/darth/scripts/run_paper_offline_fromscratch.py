@@ -43,7 +43,7 @@ COMMON_INDEX_ROOT = (
     PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603/darth/index"
 )
 DEFAULT_RUN_ROOT = (
-    PROJECT_ROOT / "index/darth_m32_efc500_target095_paper_fromscratch_20260615"
+    PROJECT_ROOT / "index/darth_m32_efc500_target095_paper_fromscratch"
 )
 DARTH_BIN = (
     PAPERS_ROOT

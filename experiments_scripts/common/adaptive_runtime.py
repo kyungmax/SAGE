@@ -263,7 +263,8 @@ def run_adaptive_query(
     paper_bucket_gamma_ratios=(),
     classify_start=4,
     classify_end=16,
-    chr_ema_decay=0.8,
+    cfr_ema_decay=0.8,
+    use_pre_frontier_cfr=False,
     num_threads=NUM_THREADS,
 ):
     paper_bucket_gamma_ratios = tuple(float(value) for value in paper_bucket_gamma_ratios)
@@ -275,6 +276,8 @@ def run_adaptive_query(
             raise ValueError("paper_bucket_gamma_ratios must contain exactly paper_bucket_count - 1 entries.")
 
     if query_method == "adaptive":
+        if bool(use_pre_frontier_cfr):
+            raise ValueError("use_pre_frontier_cfr is only supported for adaptive-light.")
         if use_paper_bucket:
             return index.knn_query_adaptive_analysis_paper_bucket(
                 data=test,
@@ -289,7 +292,7 @@ def run_adaptive_query(
                 bucket_gamma_ratios=list(paper_bucket_gamma_ratios),
                 classify_start=int(classify_start),
                 classify_end=int(classify_end),
-                chr_ema_decay=float(chr_ema_decay),
+                cfr_ema_decay=float(cfr_ema_decay),
             )
         return index.knn_query_adaptive_analysis(
             data=test,
@@ -304,12 +307,15 @@ def run_adaptive_query(
             num_threads=num_threads,
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
         )
 
     if query_method == "adaptive-light":
         if use_paper_bucket:
-            query_sage = getattr(index, "knn_query_sage", None)
+            if bool(use_pre_frontier_cfr):
+                query_sage = index.knn_query_adaptive_light_paper_bucket_pre_frontier
+            else:
+                query_sage = getattr(index, "knn_query_sage", None)
             if query_sage is None:
                 query_sage = index.knn_query_adaptive_light_paper_bucket
             labels, dists = query_sage(
@@ -323,11 +329,16 @@ def run_adaptive_query(
                 bucket_gamma_ratios=list(paper_bucket_gamma_ratios),
                 classify_start=int(classify_start),
                 classify_end=int(classify_end),
-                chr_ema_decay=float(chr_ema_decay),
+                cfr_ema_decay=float(cfr_ema_decay),
                 num_threads=num_threads,
             )
             return labels, dists
-        labels, dists = index.knn_query_adaptive_light(
+        adaptive_light = (
+            index.knn_query_adaptive_light_pre_frontier
+            if bool(use_pre_frontier_cfr)
+            else index.knn_query_adaptive_light
+        )
+        labels, dists = adaptive_light(
             test,
             k=k_search,
             ef_init=ef,
@@ -338,7 +349,7 @@ def run_adaptive_query(
             tmin_pops=tmin_pops,
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
             num_threads=num_threads,
         )
         return labels, dists
@@ -360,7 +371,8 @@ def validate_query_method(
     paper_bucket_gamma_ratios=(),
     classify_start=4,
     classify_end=16,
-    chr_ema_decay=0.8,
+    cfr_ema_decay=0.8,
+    use_pre_frontier_cfr=False,
     num_threads=NUM_THREADS,
 ) -> None:
     try:
@@ -380,7 +392,8 @@ def validate_query_method(
             paper_bucket_gamma_ratios=paper_bucket_gamma_ratios,
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
+            use_pre_frontier_cfr=bool(use_pre_frontier_cfr),
             num_threads=num_threads,
         )
     except AttributeError as exc:
@@ -396,10 +409,18 @@ def validate_query_method(
             fallback_method_name = method_name
         else:
             if use_paper_bucket:
-                method_name = "knn_query_sage"
-                fallback_method_name = "knn_query_adaptive_light_paper_bucket"
+                if bool(use_pre_frontier_cfr):
+                    method_name = "knn_query_adaptive_light_paper_bucket_pre_frontier"
+                    fallback_method_name = method_name
+                else:
+                    method_name = "knn_query_sage"
+                    fallback_method_name = "knn_query_adaptive_light_paper_bucket"
             else:
-                method_name = "knn_query_adaptive_light"
+                method_name = (
+                    "knn_query_adaptive_light_pre_frontier"
+                    if bool(use_pre_frontier_cfr)
+                    else "knn_query_adaptive_light"
+                )
                 fallback_method_name = method_name
         method = getattr(index, method_name, None)
         if method is None and fallback_method_name != method_name:

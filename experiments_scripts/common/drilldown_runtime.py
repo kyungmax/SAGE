@@ -382,7 +382,7 @@ def run_drilldown_for_k(
             optional_runtime_kwargs = {
                 "classify_start": int(getattr(args, "classify_start", 4)),
                 "classify_end": int(getattr(args, "classify_end", 16)),
-                "chr_ema_decay": float(getattr(args, "chr_ema_decay", 0.8)),
+                "cfr_ema_decay": float(getattr(args, "cfr_ema_decay", 0.8)),
             }
             try:
                 ours_metrics = benchmark_ours_fn(**ours_kwargs, **optional_runtime_kwargs)

@@ -17,20 +17,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-LOCAL_HNSWLIB = Path("/home/kyungmin/vectordb/hnswlib")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+LOCAL_HNSWLIB = Path(os.environ.get("SAGE_HNSWLIB_EXTENSION_ROOT", str(REPO_ROOT / "hnswlib"))).expanduser()
 if str(LOCAL_HNSWLIB) not in sys.path:
     sys.path.insert(0, str(LOCAL_HNSWLIB))
 
 import hnswlib  # noqa: E402
 
 
-DEFAULT_FALSE_EASY_DIR = Path(
-    "/home/kyungmin/vectordb/hnsw-playground/trials_on_fixing_search_process/"
-    "adaptive_efsearch/papers/ours/final_analysis/false_easy_analysis"
-)
-DEFAULT_DATASET_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground/datasets")
-DEFAULT_INDEX_DIR = Path("/home/kyungmin/vectordb/hnsw-playground/index")
-DEFAULT_OUTPUT_DIR = DEFAULT_FALSE_EASY_DIR / "first_pass_gt_spread_local_minima_20260622"
+DEFAULT_FALSE_EASY_DIR = REPO_ROOT / "final_analysis/false_easy_analysis"
+DEFAULT_DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(REPO_ROOT / "datasets"))).expanduser()
+DEFAULT_INDEX_DIR = Path(os.environ.get("SAGE_INDEX_DIR", str(REPO_ROOT / "index"))).expanduser()
+DEFAULT_OUTPUT_DIR = DEFAULT_FALSE_EASY_DIR / "first_pass_gt_spread_local_minima"
 
 CLASSIFY_START = 4
 CLASSIFY_END = 16
@@ -47,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cohort-csv",
         type=Path,
-        default=DEFAULT_FALSE_EASY_DIR / "hard_false_easy_chr_ratio_margins.csv",
+        default=DEFAULT_FALSE_EASY_DIR / "hard_false_easy_cfr_ratio_margins.csv",
     )
     parser.add_argument("--dataset-root", type=Path, default=DEFAULT_DATASET_ROOT)
     parser.add_argument("--index-dir", type=Path, default=DEFAULT_INDEX_DIR)
@@ -214,8 +212,8 @@ def compute_gt_spread_metrics(
     qid: int,
     route: int,
     drop: float,
-    chr_value: float,
-    chr_ratio: float,
+    cfr_value: float,
+    cfr_ratio: float,
     first_step: float,
     query_vector: np.ndarray,
     gt_labels: np.ndarray,
@@ -249,8 +247,8 @@ def compute_gt_spread_metrics(
         "cohort": cohort,
         "route": int(route),
         "drop": float(drop) if np.isfinite(drop) else np.nan,
-        "classify_chr_mean": float(chr_value) if np.isfinite(chr_value) else np.nan,
-        "classify_chr_ratio": float(chr_ratio) if np.isfinite(chr_ratio) else np.nan,
+        "classify_cfr_mean": float(cfr_value) if np.isfinite(cfr_value) else np.nan,
+        "classify_cfr_ratio": float(cfr_ratio) if np.isfinite(cfr_ratio) else np.nan,
         "feature_first_final_step": float(first_step) if np.isfinite(first_step) else np.nan,
         "gt_k": k,
         "gt_pair_index_mean": gt_pair_idx_mean,
@@ -310,7 +308,7 @@ def extract_trace_metrics(path: list[dict[str, Any]], gt_labels: np.ndarray, ef:
     classify_gt_popped: set[int] = set()
     classify_labels: list[int] = []
     before16_labels: list[int] = []
-    classify_chr_values: list[float] = []
+    classify_cfr_values: list[float] = []
     classify_popped_dist: list[float] = []
     classify_furthest_dist: list[float] = []
     fallback_full_count = 0
@@ -348,7 +346,7 @@ def extract_trace_metrics(path: list[dict[str, Any]], gt_labels: np.ndarray, ef:
             if np.isfinite(furthest_f):
                 classify_furthest_dist.append(furthest_f)
             if np.isfinite(popped_f) and np.isfinite(furthest_f) and furthest_f > EPS:
-                classify_chr_values.append(popped_f / furthest_f)
+                classify_cfr_values.append(popped_f / furthest_f)
 
     return {
         "trace_path_len": int(len(path)),
@@ -362,7 +360,7 @@ def extract_trace_metrics(path: list[dict[str, Any]], gt_labels: np.ndarray, ef:
         "trace_classify_unique_label_count": int(len(set(classify_labels))),
         "trace_before16_label_count": int(len(before16_labels)),
         "trace_before16_unique_label_count": int(len(set(before16_labels))),
-        "trace_classify_raw_chr_mean": safe_mean(np.asarray(classify_chr_values, dtype=np.float64)),
+        "trace_classify_raw_cfr_mean": safe_mean(np.asarray(classify_cfr_values, dtype=np.float64)),
         "trace_classify_popped_dist_mean": safe_mean(np.asarray(classify_popped_dist, dtype=np.float64)),
         "trace_classify_furthest_dist_mean": safe_mean(np.asarray(classify_furthest_dist, dtype=np.float64)),
         "trace_classify_labels": classify_labels,
@@ -657,8 +655,8 @@ def run_dataset(dataset: str, cohort_df: pd.DataFrame, args: argparse.Namespace)
                     qid=int(source_row.qid),
                     route=int(source_row.route),
                     drop=float(source_row.drop),
-                    chr_value=float(source_row.chr),
-                    chr_ratio=float(source_row.ratio),
+                    cfr_value=float(source_row.cfr),
+                    cfr_ratio=float(source_row.ratio),
                     first_step=float(source_row.first_step),
                     query_vector=query_vectors[local_idx],
                     gt_labels=gt_labels_all[local_idx],
@@ -759,8 +757,8 @@ def main() -> int:
     all_metrics.to_csv(output_dir / "per_query_gt_spread_local_minima_metrics.csv", index=False)
 
     metrics = [
-        "classify_chr_mean",
-        "classify_chr_ratio",
+        "classify_cfr_mean",
+        "classify_cfr_ratio",
         "feature_first_final_step",
         "gt_pair_index_mean",
         "gt_pair_index_norm_by_qgt_p90",
@@ -775,7 +773,7 @@ def main() -> int:
         "trace_gt_pop_count_total",
         "trace_gt_pop_count_before_fullpop16",
         "trace_gt_pop_count_classify_window",
-        "trace_classify_raw_chr_mean",
+        "trace_classify_raw_cfr_mean",
         "trace_classify_popped_dist_mean",
         "early_pair_cos_mean",
         "early_q_cos_mean",

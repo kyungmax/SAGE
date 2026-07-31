@@ -11,18 +11,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import h5py
 import numpy as np
 
 
-PROJECT_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground")
-PAPERS_ROOT = PROJECT_ROOT / "trials_on_fixing_search_process/adaptive_efsearch/papers"
-DATASET_ROOT = PROJECT_ROOT / "datasets"
-GLOBAL_PROCESSED = PROJECT_ROOT / "datasets/processed/DARTH"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))).expanduser()
+DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(PROJECT_ROOT / "datasets"))).expanduser()
+GLOBAL_PROCESSED = DATASET_ROOT / "processed/DARTH"
 REUSE_ROOT = PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603"
-DEFAULT_RUN_ROOT = PROJECT_ROOT / "index/darth_m32_efc500_efs1000_training10k_5datasets_20260615"
+DEFAULT_RUN_ROOT = PROJECT_ROOT / "index/darth_m32_efc500_efs1000_training10k_5datasets"
 
 
 DATASETS = {

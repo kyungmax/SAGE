@@ -135,9 +135,9 @@ struct SearchStepInfo {
     size_t unvisited_neighbor_count;
     size_t accepted_neighbor_count;
     float runtime_accepted_rate;
-    float runtime_chr;
-    float runtime_smoothed_chr;
-    float runtime_classify_chr_mean;
+    float runtime_cfr;
+    float runtime_smoothed_cfr;
+    float runtime_classify_cfr_mean;
     bool runtime_classification_evaluated;
     bool runtime_is_easy_query;
     bool runtime_is_super_easy_query;

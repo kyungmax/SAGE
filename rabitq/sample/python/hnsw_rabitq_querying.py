@@ -94,9 +94,9 @@ def main(args=None) -> None:
             full_pops = stats["full_pop_count"]
             base_bin = stats.get("base_bin_est_count")
             base_full = stats.get("base_full_est_count")
-            chr_mean = stats["classify_chr_mean"]
-            finite_chr = chr_mean[np.isfinite(chr_mean)]
-            chr_avg = float(finite_chr.mean()) if finite_chr.size else float("nan")
+            cfr_mean = stats["classify_cfr_mean"]
+            finite_cfr = cfr_mean[np.isfinite(cfr_mean)]
+            cfr_avg = float(finite_cfr.mean()) if finite_cfr.size else float("nan")
             full_ratio = (float(base_full.sum()) / float(base_bin.sum())) if base_bin is not None and base_bin.sum() else float("nan")
             print(
                 f"EF {ef}: effective_ef mean/min/max="
@@ -104,7 +104,7 @@ def main(args=None) -> None:
                 f"classified={classified.sum()}/{nq}, easy={easy.sum()}/{nq}, "
                 f"super_easy={super_easy.sum()}/{nq}, mid_easy={mid_easy.sum()}/{nq}, "
                 f"shrunk={shrunk.sum()}/{nq}, early_stopped={stopped.sum()}/{nq}, "
-                f"full_pops_mean={full_pops.mean():.1f}, classify_chr_mean={chr_avg:.4f}, "
+                f"full_pops_mean={full_pops.mean():.1f}, classify_cfr_mean={cfr_avg:.4f}, "
                 f"base_full_est_ratio={full_ratio:.4f}"
             )
 
@@ -129,9 +129,9 @@ def main(args=None) -> None:
                         int(stats.get("mid_easy_query", np.zeros(nq, dtype=bool))[qid]),
                         int(stats["ef_shrunk"][qid]),
                         int(stats["early_stopped"][qid]),
-                        float(stats["classify_chr_mean"][qid]),
+                        float(stats["classify_cfr_mean"][qid]),
                     ])
-            header = "ef_init,query_id,initial_ef,effective_ef,full_pop_count,base_bin_est_count,base_full_est_count,classified,easy_query,super_easy_query,mid_easy_query,ef_shrunk,early_stopped,classify_chr_mean"
+            header = "ef_init,query_id,initial_ef,effective_ef,full_pop_count,base_bin_est_count,base_full_est_count,classified,easy_query,super_easy_query,mid_easy_query,ef_shrunk,early_stopped,classify_cfr_mean"
             np.savetxt(args.stats_out, np.asarray(rows, dtype=object), delimiter=",", header=header, comments="", fmt="%s")
             print(f"Per-query adaptive stats saved -> {args.stats_out}")
 
@@ -148,7 +148,7 @@ if __name__ == "__main__":
     parser.add_argument("--efs", dest="efs", type=int, nargs="+", default=None, help="EF values to benchmark; defaults to [128] for adaptive-light and a sweep otherwise")
     parser.add_argument("--adaptive-light", dest="adaptive_light", action="store_true", help="Use CFR adaptive-light search")
     parser.add_argument("--disable-stop", dest="enable_stop", action="store_false", default=True, help="Disable hard-query stagnation stop")
-    parser.add_argument("--early-stop-ratio", dest="early_stop_ratio", type=float, default=0.6, help="CFR/CHR threshold for easy-query classification")
+    parser.add_argument("--early-stop-ratio", dest="early_stop_ratio", type=float, default=0.6, help="CFR threshold for easy-query classification")
     parser.add_argument("--tmin-pops", dest="tmin_pops", type=int, default=25, help="Minimum full-queue pops before hard-query stop")
     parser.add_argument("--ef-max", dest="ef_max", type=int, default=1024, help="Maximum effective ef for adaptive-light")
     parser.add_argument("--super-easy-gamma-ratio", dest="super_easy_gamma_ratio", type=float, default=np.nan, help="Optional super-easy bucket threshold")

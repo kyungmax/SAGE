@@ -109,17 +109,18 @@ def safe_path_token(value: Any) -> str:
 
 
 def ablation_signature(args: argparse.Namespace) -> str:
-    alpha = safe_path_token(f"{float(args.chr_ema_decay):g}")
-    return "__".join(
-        [
-            f"{safe_path_token(args.ablation_name)}_{safe_path_token(args.ablation_value)}",
-            f"ncal{int(args.num_calibration_queries)}",
-            f"cs{int(args.classify_start)}ce{int(args.classify_end)}",
-            f"alpha{alpha}",
-            f"g{int(args.pair_gap)}",
-            f"b{int(args.mixed_bucket_count)}",
-        ]
-    )
+    alpha = safe_path_token(f"{float(args.cfr_ema_decay):g}")
+    parts = [
+        f"{safe_path_token(args.ablation_name)}_{safe_path_token(args.ablation_value)}",
+        f"ncal{int(args.num_calibration_queries)}",
+        f"cs{int(args.classify_start)}ce{int(args.classify_end)}",
+        f"alpha{alpha}",
+        f"g{int(args.pair_gap)}",
+        f"b{int(args.mixed_bucket_count)}",
+    ]
+    if bool(getattr(args, "use_pre_frontier_cfr", False)):
+        parts.append("cfrprefrontier")
+    return "__".join(parts)
 
 
 def ablation_metadata(args: argparse.Namespace) -> dict[str, Any]:
@@ -129,7 +130,11 @@ def ablation_metadata(args: argparse.Namespace) -> dict[str, Any]:
         "ablation_signature": ablation_signature(args),
         "classify_start": int(args.classify_start),
         "classify_end": int(args.classify_end),
-        "chr_ema_decay": float(args.chr_ema_decay),
+        "cfr_ema_decay": float(args.cfr_ema_decay),
+        "use_pre_frontier_cfr": bool(getattr(args, "use_pre_frontier_cfr", False)),
+        "cfr_observation_mode": (
+            "pre_frontier" if bool(getattr(args, "use_pre_frontier_cfr", False)) else "post_expansion"
+        ),
         "pair_gap": int(args.pair_gap),
     }
 
@@ -180,7 +185,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ablation-value", default="default")
     parser.add_argument("--classify-start", type=int, default=4)
     parser.add_argument("--classify-end", type=int, default=16)
-    parser.add_argument("--chr-ema-decay", type=float, default=0.8)
+    parser.add_argument("--cfr-ema-decay", type=float, default=0.8)
+    parser.add_argument(
+        "--use-pre-frontier-cfr",
+        action="store_true",
+        help="Use pre-expansion frontier CFR for calibration and adaptive-light routing.",
+    )
     parser.add_argument("--pair-gap", type=int, default=2)
     parser.add_argument("--internal-lid-k", type=int, default=15)
     parser.add_argument("--calibration-sample-seed", type=int, default=DEFAULT_CALIBRATION_SAMPLE_SEED)
@@ -243,8 +253,8 @@ def parse_args() -> argparse.Namespace:
         raise ValueError("--classify-end must be >= 1.")
     if int(args.classify_end) < int(args.classify_start):
         raise ValueError("--classify-end must be >= --classify-start.")
-    if not np.isfinite(float(args.chr_ema_decay)) or not (0.0 <= float(args.chr_ema_decay) <= 1.0):
-        raise ValueError("--chr-ema-decay must lie in [0, 1].")
+    if not np.isfinite(float(args.cfr_ema_decay)) or not (0.0 <= float(args.cfr_ema_decay) <= 1.0):
+        raise ValueError("--cfr-ema-decay must lie in [0, 1].")
     if int(args.pair_gap) < 1:
         raise ValueError("--pair-gap must be >= 1.")
     if args.drilldown_ef_sweep:
@@ -343,10 +353,11 @@ def benchmark_ours_k(
     paper_bucket_gamma_ratios: tuple[float, ...],
     classify_start: int,
     classify_end: int,
-    chr_ema_decay: float,
+    cfr_ema_decay: float,
     warmup_runs: int,
     measured_runs: int,
     num_threads: int,
+    use_pre_frontier_cfr: bool = False,
 ) -> dict[str, float]:
     def run_once():
         return run_adaptive_query(
@@ -365,7 +376,8 @@ def benchmark_ours_k(
             paper_bucket_gamma_ratios=paper_bucket_gamma_ratios,
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
+            use_pre_frontier_cfr=bool(use_pre_frontier_cfr),
             num_threads=int(num_threads),
         )
 
@@ -535,7 +547,8 @@ def main() -> int:
         handle.write(
             f"# offline_num_threads={int(args.offline_num_threads)} "
             f"online_num_threads={int(args.online_num_threads)} "
-            f"measured_runs={int(args.measured_runs)}\n\n"
+            f"measured_runs={int(args.measured_runs)} "
+            f"use_pre_frontier_cfr={bool(args.use_pre_frontier_cfr)}\n\n"
         )
 
     completed = {
@@ -726,7 +739,8 @@ def main() -> int:
                     ablation_value=str(args.ablation_value),
                     classify_start=int(args.classify_start),
                     classify_end=int(args.classify_end),
-                    chr_ema_decay=float(args.chr_ema_decay),
+                    cfr_ema_decay=float(args.cfr_ema_decay),
+                    use_pre_frontier_cfr=bool(args.use_pre_frontier_cfr),
                     pair_gap=int(args.pair_gap),
                 )
                 threshold_calibration_wall_s = time.perf_counter() - threshold_start
@@ -759,7 +773,8 @@ def main() -> int:
                     cache_path=cache_path,
                     classify_start=int(args.classify_start),
                     classify_end=int(args.classify_end),
-                    chr_ema_decay=float(args.chr_ema_decay),
+                    cfr_ema_decay=float(args.cfr_ema_decay),
+                    use_pre_frontier_cfr=bool(args.use_pre_frontier_cfr),
                 )
                 offline_curve_df.to_csv(offline_curve_csv, index=False)
                 offline_recommended_df.to_csv(offline_recommended_csv, index=False)
@@ -818,7 +833,8 @@ def main() -> int:
                     paper_bucket_gamma_ratios=first_bucket_gammas,
                     classify_start=int(args.classify_start),
                     classify_end=int(args.classify_end),
-                    chr_ema_decay=float(args.chr_ema_decay),
+                    cfr_ema_decay=float(args.cfr_ema_decay),
+                    use_pre_frontier_cfr=bool(args.use_pre_frontier_cfr),
                     num_threads=int(args.online_num_threads),
                 )
 
@@ -875,7 +891,8 @@ def main() -> int:
                         paper_bucket_gamma_ratios=bucket_gammas,
                         classify_start=int(args.classify_start),
                         classify_end=int(args.classify_end),
-                        chr_ema_decay=float(args.chr_ema_decay),
+                        cfr_ema_decay=float(args.cfr_ema_decay),
+                        use_pre_frontier_cfr=bool(args.use_pre_frontier_cfr),
                         warmup_runs=int(args.warmup_runs),
                         measured_runs=int(args.measured_runs),
                         num_threads=int(args.online_num_threads),
@@ -910,6 +927,10 @@ def main() -> int:
                         "dataset_load_wall_s": float(dataset_load_wall_s),
                         "index_load_wall_s": float(index_load_wall_s),
                         "mixed_threshold_mode": str(args.mixed_threshold_mode),
+                        "use_pre_frontier_cfr": bool(args.use_pre_frontier_cfr),
+                        "cfr_observation_mode": (
+                            "pre_frontier" if bool(args.use_pre_frontier_cfr) else "post_expansion"
+                        ),
                         "mixed_bucket_count": (
                             int(args.mixed_bucket_count)
                             if str(args.mixed_threshold_mode) == "paper_floor_half"

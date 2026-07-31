@@ -15,7 +15,7 @@ from pathlib import Path
 PROJECT_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground")
 PAPERS_ROOT = PROJECT_ROOT / "trials_on_fixing_search_process/adaptive_efsearch/papers"
 REUSE_ROOT = PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603"
-DEFAULT_RUN_ROOT = PROJECT_ROOT / "index/darth_m32_efc500_efs1000_training10k_5datasets_20260615"
+DEFAULT_RUN_ROOT = PROJECT_ROOT / "index/darth_m32_efc500_efs1000_training10k_5datasets"
 DARTH_BIN = PAPERS_ROOT / "hnsw-ada-ef/benchmarking-darth/build-local/hnsw-test/hnsw_test"
 
 

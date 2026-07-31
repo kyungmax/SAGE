@@ -29,8 +29,9 @@ from common.offline_calibration import compute_fixed_calibration_lid_pool  # noq
 from common.projected_local_acceptable_runtime import _select_dummy_queries  # noqa: E402
 import final_index_utils  # noqa: E402
 
-DEFAULT_LEGACY_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground")
-DEFAULT_PROJECT_ROOT = Path(os.environ.get("HNSW_PLAYGROUND_ROOT", str(DEFAULT_LEGACY_ROOT))).expanduser()
+DEFAULT_PROJECT_ROOT = Path(
+    os.environ.get("HNSW_PLAYGROUND_ROOT", os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT)))
+).expanduser()
 DEFAULT_DATA_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
 DEFAULT_INDEX_ROOT = Path(
     os.environ.get(
@@ -44,7 +45,7 @@ DEFAULT_INDEX_ROOT = Path(
 DEFAULT_FAISS_PYTHON_PATH = Path(
     os.environ.get(
         "FAISS_PYTHON_PATH",
-        "/home/kyungmin/vectordb/faiss/build_hnsw_py312_avx512/faiss/python",
+        str(REPO_ROOT / "faiss/build_sage_avx512/faiss/python"),
     )
 ).expanduser()
 DEFAULT_DATASETS = (

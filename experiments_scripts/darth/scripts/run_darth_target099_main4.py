@@ -25,18 +25,27 @@ import types
 from pathlib import Path
 
 
-PROJECT_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground")
+REPO_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))).expanduser()
 THIS_ROOT = Path(__file__).resolve().parents[1]
 RUNNER_PATH = THIS_ROOT / "scripts/run_paper_offline_fromscratch.py"
-DATASET_ROOT = PROJECT_ROOT / "datasets"
-PATCHED_DARTH_ROOT = (
-    PROJECT_ROOT
-    / "trials_on_fixing_search_process/adaptive_efsearch/outdated/experiments/darth/benchmarking-darth"
-)
-PATCHED_DARTH_BIN = PATCHED_DARTH_ROOT / "build-local/hnsw-test/hnsw_test"
-PATCHED_FAISS_LIB_DIR = PATCHED_DARTH_ROOT / "build-local/faiss"
-VERIFIED_FAISS_INDEX_ROOT = PROJECT_ROOT / "index/faiss_m32_efc500_main8_20260707/darth/index"
-DEFAULT_RUN_ROOT = PROJECT_ROOT / "index/darth_m32_efc500_target099_main4_20260728"
+DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(PROJECT_ROOT / "datasets"))).expanduser()
+PATCHED_DARTH_ROOT = Path(
+    os.environ.get("SAGE_DARTH_ROOT", str(REPO_ROOT / "baselines/darth/benchmarking-darth"))
+).expanduser()
+PATCHED_DARTH_BIN = Path(
+    os.environ.get("SAGE_DARTH_BIN", str(PATCHED_DARTH_ROOT / "build-simd-avx512/hnsw-test/hnsw_test"))
+).expanduser()
+PATCHED_FAISS_LIB_DIR = Path(
+    os.environ.get("SAGE_DARTH_FAISS_LIB_DIR", str(PATCHED_DARTH_ROOT / "build-simd-avx512/faiss"))
+).expanduser()
+VERIFIED_FAISS_INDEX_ROOT = Path(
+    os.environ.get(
+        "SAGE_FAISS_INDEX_ROOT",
+        str(PROJECT_ROOT / "index/faiss_m32_efc500_main8_20260707/darth/index"),
+    )
+).expanduser()
+DEFAULT_RUN_ROOT = PROJECT_ROOT / "index/darth_m32_efc500_target099_main4"
 
 
 DATASET_DEFS = {

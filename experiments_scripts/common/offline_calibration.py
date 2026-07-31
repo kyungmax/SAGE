@@ -76,7 +76,8 @@ def resolve_mixed_policy_with_status(
     ablation_value: str = "default",
     classify_start: int = 4,
     classify_end: int = 16,
-    chr_ema_decay: float = 0.8,
+    cfr_ema_decay: float = 0.8,
+    use_pre_frontier_cfr: bool = False,
     pair_gap: int = 2,
 ):
     return load_or_build_dynamic_projected_local_acceptable_mixed_policy(
@@ -109,7 +110,8 @@ def resolve_mixed_policy_with_status(
         mixed_bucket_count=int(mixed_bucket_count),
         classify_start=int(classify_start),
         classify_end=int(classify_end),
-        chr_ema_decay=float(chr_ema_decay),
+        cfr_ema_decay=float(cfr_ema_decay),
+        use_pre_frontier_cfr=bool(use_pre_frontier_cfr),
         paper_floor_pair_gap=int(pair_gap),
         cache_context={
             "calibration_graph_variant": "original",
@@ -121,7 +123,9 @@ def resolve_mixed_policy_with_status(
             "ablation_value": str(ablation_value),
             "classify_start": int(classify_start),
             "classify_end": int(classify_end),
-            "chr_ema_decay": float(chr_ema_decay),
+            "cfr_ema_decay": float(cfr_ema_decay),
+            "use_pre_frontier_cfr": bool(use_pre_frontier_cfr),
+            "cfr_observation_mode": "pre_frontier" if bool(use_pre_frontier_cfr) else "post_expansion",
             "pair_gap": int(pair_gap),
         },
     )

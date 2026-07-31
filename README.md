@@ -22,6 +22,12 @@ through `knn_query_adaptive_light`.
   `faiss/python/class_wrappers.py`.
 - `hnswlib/` -- reference/secondary SAGE implementation used to validate that
   the policy ports across independent HNSW implementations.
+- `datasets/` -- local drop-in directory for HDF5 datasets. The directory is
+  tracked, but dataset files are ignored by git.
+- `index/` -- local drop-in directory for downloaded prebuilt FAISS and hnswlib
+  indexes. The directory is tracked, but index binaries are ignored by git.
+- `sage_env.sh`, `setup.sh`, `run_main8.sh` -- root-level artifact entrypoints
+  for environment defaults, directory setup, and the main eight-dataset run.
 - `experiments_scripts/` -- runnable experiment scripts, backend adapters, shared
   calibration logic, and lower-level recall-latency drivers.
 - `experiments_scripts/faiss/` -- FAISS-backed SAGE adapter and backend-specific
@@ -32,7 +38,7 @@ through `knn_query_adaptive_light`.
   vendored HNSW headers needed by the runner.
 - `experiments_scripts/darth/` -- DARTH baseline rerun wrappers.
 - `final_experiments/01_main_results/` -- main eight-dataset experiment
-  wrappers, manifests, final CSVs, and combined recall-latency plot assets.
+  wrappers and manifests.
 - `final_experiments/02_drill_down/` -- easy/medium/hard query-group analysis
   and false-easy replay scripts.
 - `final_experiments/03_offline_cost/` -- offline calibration-cost study.
@@ -43,13 +49,43 @@ through `knn_query_adaptive_light`.
 - `final_analysis/` -- analysis scripts and submission-figure generation for
   probe representativeness, difficulty drill-down, CFR behavior, and backend
   distance-count checks.
-- `baselines/` -- wrappers and copied outputs for Ada-EF and DARTH.
-- `plots/` -- plot-only scripts and gnuplot templates.
+- `baselines/` -- baseline source snapshots, wrappers, and provenance notes.
+- `plots/` -- plot-generation scripts and gnuplot templates.
 - `docs/` -- artifact notes, troubleshooting, and dataset/index instructions.
 
 > **Artifact status:** this README is the submission-facing draft. `TODO`
 > entries mark information that should be filled before artifact packaging
 > (public data links, checksums, exact figure numbers, and citation metadata).
+
+## Quick Start
+
+From a fresh clone, use the root entrypoints first:
+
+```bash
+cd /path/to/sage
+./setup.sh
+source ./sage_env.sh
+```
+
+By default, datasets are read from `$SAGE_ROOT/datasets`, hnswlib indexes from
+`$SAGE_ROOT/index`, and FAISS indexes from
+`$SAGE_ROOT/index/faiss_m32_efc500_main8_20260707/darth/index`. To keep large
+files on another volume, export `SAGE_DATA_DIR` and/or `SAGE_INDEX_DIR` before
+running `setup.sh` or sourcing `sage_env.sh`.
+
+After building FAISS and hnswlib and placing the data/index files, the main
+artifact entrypoint is:
+
+```bash
+./run_main8.sh
+```
+
+Use the underlying runner subcommands through the same wrapper when needed:
+
+```bash
+./run_main8.sh run-cell --cell faiss
+./run_main8.sh run-cell --cell hnswlib
+```
 
 ## Hardware Configuration
 
@@ -86,7 +122,7 @@ optimized CPU path; AVX-512 is recommended on matching hardware.
 ### FAISS
 
 ```bash
-export SAGE_ROOT=/path/to/sage
+source /path/to/sage/sage_env.sh
 cd $SAGE_ROOT/faiss
 
 cmake -S . -B build_sage_avx512 \
@@ -134,36 +170,54 @@ python3 -m pip install -e .
 
 ## Data and Indexes
 
-Set the dataset and index roots before running experiments:
+Initialize the standard artifact directories before running experiments:
 
 ```bash
-export SAGE_DATA_DIR=/path/to/datasets
-export SAGE_INDEX_DIR=/path/to/index/faiss_m32_efc500_main8_20260707/darth/index
+./setup.sh
+source ./sage_env.sh
 ```
 
+To keep large files outside the repository, export `SAGE_DATA_DIR` or
+`SAGE_INDEX_DIR` first; `sage_env.sh` preserves those overrides.
+
 The main paper experiments use eight HDF5 datasets with `train`, `test`, and
-`neighbors` arrays:
+`neighbors` arrays. Download or prepare the HDF5 files under `SAGE_DATA_DIR`.
+The author-provided artifact bundle will include custom datasets/indexes that do
+not have a stable public HDF5 source.
 
-| Dataset file | Size | Dim | Metric | Modality |
-|--------------|------|-----|--------|----------|
-| `glove-100-angular.hdf5` | 1.18M | 100 | angular | text |
-| `nytimes-256-angular.hdf5` | 290K | 256 | angular | text |
-| `msmarco-v1-openai-ada2-full-ip.hdf5` | 8.84M | 1536 | inner product | text |
-| `msspacev-100M-i8-euclidean.hdf5` | 100M | 100 | Euclidean | vector benchmark |
-| `cohere-768-angular.hdf5` | 10M | 768 | angular | text |
-| `youtube-15M-angular.hdf5` | 15M | 1024 | angular | image/video |
-| `agnews-mxbai-1024-euclidean.hdf5` | 769K | 1024 | Euclidean | text |
-| `landmark-nomic-768-angular.hdf5` | 761K | 768 | angular | image |
+| Dataset file | Size | Dim | Metric | Source |
+|--------------|------|-----|--------|--------|
+| `glove-100-angular.hdf5` | 1.18M | 100 | angular | [ANN-Benchmarks HDF5](https://ann-benchmarks.com/glove-100-angular.hdf5) |
+| `nytimes-256-angular.hdf5` | 290K | 256 | angular | [ANN-Benchmarks HDF5](https://ann-benchmarks.com/nytimes-256-angular.hdf5) |
+| `msmarco-v1-openai-ada2-full-ip.hdf5` | 8.84M | 1536 | inner product | Author-provided MSMARCO embedding artifact |
+| `msspacev-100M-i8-euclidean.hdf5` | 100M | 100 | Euclidean | [SpaceV 100M source](https://huggingface.co/datasets/unum-cloud/ann-spacev-100m); convert to the expected HDF5 layout |
+| `cohere-768-angular.hdf5` | 10M | 768 | angular | Author-provided CohereWiki artifact |
+| `youtube-15M-angular.hdf5` | 15M | 1024 | angular | Author-provided YouTube artifact/index bundle |
+| `agnews-mxbai-1024-euclidean.hdf5` | 769K | 1024 | Euclidean | [VIBE dataset bundle](https://huggingface.co/datasets/vector-index-bench/vibe) |
+| `landmark-nomic-768-angular.hdf5` | 761K | 768 | angular | [VIBE `landmark-nomic-768-normalized.hdf5`](https://huggingface.co/datasets/vector-index-bench/vibe); save or symlink as the expected filename |
 
-All main indexes use:
-- `M=32`
-- `efConstruction=500`
-- `k=10`
-- target recall `0.95`
+Prebuilt indexes should be downloaded from the SAGE artifact Google Drive link
+and copied or extracted into `index/`:
 
-TODO: add public download links, expected directory layout, file sizes, and
-checksums for datasets and prebuilt indexes. Large HDF5 datasets, index files,
-raw logs, and cache directories should not be committed to git.
+```text
+TODO: Google Drive index/artifact link
+```
+
+Expected default FAISS layout:
+
+```text
+index/faiss_m32_efc500_main8_20260707/darth/index/<dataset-stem>/<dataset-stem>.M32.efC500.index
+```
+
+hnswlib indexes are read directly from `SAGE_INDEX_DIR` using filenames produced
+by `experiments_scripts/hnswlib/hnsw_index_utils.py`, for example:
+
+```text
+index/glove-100-angular_M32_M32_efC500_n1183514_dim100
+```
+
+Large HDF5 datasets, index files, generated CSV files, plots, raw logs, and
+cache directories should not be committed to git.
 
 ## SAGE Configuration
 
@@ -181,8 +235,9 @@ Default paper configuration:
 
 ## Reproducing Experiments
 
-The scripts write per-dataset run outputs under each experiment's `run/`
-directory and consolidated CSV/Markdown summaries under `final/`.
+The commands below generate per-dataset run outputs in the `run/` directory for
+each experiment and consolidated CSV/Markdown summaries under `final/`; these are
+expected generated artifacts, not source files to maintain in git.
 
 | Paper result | Driver | Description | Backend |
 |--------------|--------|-------------|---------|
@@ -201,15 +256,10 @@ TODO: replace `Paper result` labels with final VLDB figure/table numbers.
 ### Run the Main Eight-Dataset Sweep
 
 ```bash
-export SAGE_ROOT=/path/to/sage
-export SAGE_DATA_DIR=/path/to/datasets
-export SAGE_INDEX_DIR=/path/to/hnswlib/index
-export SAGE_FAISS_INDEX_ROOT=/path/to/faiss_m32_efc500_main8_20260707/darth/index
-export FAISS_PYTHON_PATH=$SAGE_ROOT/faiss/build_sage_avx512/faiss/python
-
-cd $SAGE_ROOT/final_experiments/01_main_results
-python3 run_main8_online24_20260707.py run-all \
-    --out-root main8_online24
+cd /path/to/sage
+./setup.sh
+source ./sage_env.sh
+./run_main8.sh run-all --out-root final_experiments/01_main_results/main8_online24
 ```
 
 By default this runs all eight datasets:
@@ -228,11 +278,11 @@ landmark-nomic-768-angular.hdf5
 Run one backend cell only:
 
 ```bash
-python3 run_main8_online24_20260707.py run-cell --cell faiss
-python3 run_main8_online24_20260707.py run-cell --cell hnswlib
+./run_main8.sh run-cell --cell faiss
+./run_main8.sh run-cell --cell hnswlib
 ```
 
-Main outputs:
+Expected generated outputs:
 
 ```text
 final_experiments/01_main_results/main8_online24/{faiss,hnswlib}/final/main_qps_latency_sweep.csv
@@ -258,7 +308,7 @@ cd $SAGE_ROOT/final_experiments/02_drill_down
 ./run_faiss_simd_24t.sh
 ```
 
-Primary outputs include:
+Expected generated outputs include:
 - `drilldown_faiss_SIMD_on_main8_24t/difficulty_exactgt_24t/query_groups.csv`
 - `drilldown_faiss_SIMD_on_main8_24t/difficulty_exactgt_24t/group_ef_sweep.csv`
 - `drilldown_faiss_SIMD_on_main8_24t/difficulty_exactgt_24t/group_pair_metrics.csv`
@@ -279,7 +329,7 @@ Run one backend only:
 ./run_hnswlib_simd_24t.sh
 ```
 
-Primary outputs:
+Expected generated outputs:
 - `offline_cost_main8_faiss_SIMD_on_24t/final/faiss_offline_cost_median.csv`
 - `offline_cost_main8_hnswlib_SIMD_on_24t/final/hnswlib_offline_cost_median.csv`
 
@@ -341,10 +391,10 @@ The main combined result uses:
 - Ada-EF
 - DARTH
 
-Ada-EF and DARTH outputs used by the combined plot are stored under
-`final_experiments/Ada-EF/` and `final_experiments/DARTH/`. The main-result
-tree under `final_experiments/01_main_results/` keeps the copied baseline JSONs
-used by the plot; the main8 wrapper reruns the SAGE and vanilla HNSW cells.
+The combined-plot workflow expects Ada-EF and DARTH result inputs in the paths
+documented by the plotting wrapper; regenerate them with the target-0.99 scripts
+when those files are absent. The main8 wrapper reruns only the SAGE and vanilla
+HNSW cells.
 
 From-scratch target-0.99 baseline rerun scripts are in `final_experiments/07_darth_ada-ef/`.
 Lower-level wrappers are preserved under `experiments_scripts/ada-ef/` and
@@ -353,7 +403,7 @@ Lower-level wrappers are preserved under `experiments_scripts/ada-ef/` and
 
 ## Plotting Only
 
-Regenerate the main combined plot from existing CSV/JSON outputs:
+Regenerate the main combined plot from generated or artifact-provided CSV/JSON inputs:
 
 ```bash
 cd $SAGE_ROOT/final_experiments/01_main_results/main8_online24/combined_faiss_SIMD
