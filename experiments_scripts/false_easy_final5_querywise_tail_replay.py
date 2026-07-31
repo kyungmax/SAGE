@@ -24,7 +24,7 @@ import false_easy_first_pass_gt_spread_local_minima as first_pass  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(ROOT / "datasets"))).expanduser()
 INDEX_DIR = Path(os.environ.get("SAGE_INDEX_DIR", str(ROOT / "index"))).expanduser()
-OUTPUT_DIR = ROOT / "final_analysis/false_easy_analysis/final5_querywise_tail_replay"
+OUTPUT_DIR = ROOT / "final_analysis/false_easy_analysis/final5_querywise_tail_replay_20260623"
 DEFAULT_DATASETS = (
     "cohere-768-angular",
     "glove-100-angular",

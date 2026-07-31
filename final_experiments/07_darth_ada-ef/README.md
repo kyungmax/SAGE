@@ -16,7 +16,7 @@ Imported scope:
 Build the local SIMD binaries if they are missing:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/07_darth_ada-ef
+cd $SAGE_PROJECT_ROOT/final_experiments/07_darth_ada-ef
 ./scripts/build_darth_simd_avx512.sh
 ./scripts/build_adaef_simd_avx512.sh
 ```
@@ -24,33 +24,34 @@ cd $SAGE_ROOT/final_experiments/07_darth_ada-ef
 Run preflight:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/07_darth_ada-ef
+cd $SAGE_PROJECT_ROOT/final_experiments/07_darth_ada-ef
 python3 scripts/preflight_darth_adaef_cohere_msmarco.py
 ```
 
 Run DARTH only:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/07_darth_ada-ef
+cd $SAGE_PROJECT_ROOT/final_experiments/07_darth_ada-ef
 ./run_darth_cohere_msmarco_simd_target099.sh
 ```
 
 Run Ada-EF only:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/07_darth_ada-ef
+cd $SAGE_PROJECT_ROOT/final_experiments/07_darth_ada-ef
 ./run_adaef_cohere_msmarco_simd_target099.sh
 ```
 
 Run both baselines:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/07_darth_ada-ef
+cd $SAGE_PROJECT_ROOT/final_experiments/07_darth_ada-ef
 ./run_darth_adaef_cohere_msmarco_simd_target099.sh
 ```
 
 Important environment overrides:
 
+- `SAGE_PROJECT_ROOT`: optional repository-root override. Defaults to the detected checkout root.
 - `SAGE_DATA_DIR`: HDF5 dataset root.
 - `SAGE_FAISS_INDEX_ROOT`: reusable FAISS HNSW index root for DARTH.
 - `SAGE_HNSWLIB_INDEX_ROOT`: reusable hnswlib index root for Ada-EF symlinks.

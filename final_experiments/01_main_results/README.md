@@ -24,11 +24,12 @@ Datasets:
 - `landmark-nomic-768-angular.hdf5`
 
 Environment variables:
-- `SAGE_DATA_DIR`: dataset HDF5 root. Defaults to `$SAGE_ROOT/datasets`.
-- `SAGE_INDEX_DIR`: hnswlib index root. Defaults to `<repo>/index`.
+- `SAGE_PROJECT_ROOT`: optional repository-root override. Defaults to the detected checkout root.
+- `SAGE_DATA_DIR`: dataset HDF5 root. Defaults to `$SAGE_PROJECT_ROOT/datasets` when set, otherwise `<repo>/datasets`.
+- `SAGE_INDEX_DIR`: hnswlib index root. Defaults to `$SAGE_PROJECT_ROOT/index` when set, otherwise `<repo>/index`.
 - `SAGE_FAISS_INDEX_ROOT` or `FAISS_INDEX_ROOT`: FAISS HNSW index root. Defaults to `$SAGE_INDEX_DIR/faiss_m32_efc500_main8_20260707/darth/index`.
 - `FAISS_PYTHON_PATH`: patched FAISS Python package. Defaults to `<repo>/faiss/build_sage_avx512/faiss/python`.
-- `SAGE_PYTHON`: Python executable for child cells. Defaults to the Python executable used to launch the runner.
+- `SAGE_PYTHON`: Python executable for child cells. Defaults to the current Python executable.
 
 Run 24-thread cells from the repository root:
 
@@ -41,13 +42,14 @@ source ./sage_env.sh
 The underlying runner remains available when working inside this directory:
 
 ```bash
+cd $SAGE_PROJECT_ROOT/final_experiments/01_main_results
 python3 run_main8_online24_20260707.py run-all
 ```
 
 Run single-thread cells:
 
 ```bash
-cd $SAGE_ROOT/final_experiments/01_main_results
+cd $SAGE_PROJECT_ROOT/final_experiments/01_main_results
 python3 run_main8_online1.py run-all
 ```
 

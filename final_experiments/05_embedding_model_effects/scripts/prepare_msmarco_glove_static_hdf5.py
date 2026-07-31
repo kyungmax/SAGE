@@ -31,8 +31,7 @@ import h5py
 import numpy as np
 
 
-SCRIPT_PATH = Path(__file__).resolve()
-REPO_ROOT = SCRIPT_PATH.parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(REPO_ROOT / "datasets"))).expanduser()
 WORK_SUBDIR = "msmarco_passage_glove_static"
 COLLECTION_URL = "https://msmarco.z22.web.core.windows.net/msmarcoranking/collection.tar.gz"

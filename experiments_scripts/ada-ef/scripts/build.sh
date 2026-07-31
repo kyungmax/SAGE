@@ -6,14 +6,6 @@ BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/build}"
 BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
 JOBS="${JOBS:-$(nproc)}"
 
-if [[ -z "${CONDA_PREFIX:-}" ]]; then
-  for candidate in "${HOME}/anaconda3/envs/adaef" "${HOME}/miniconda3/envs/adaef"; do
-    if [[ -d "${candidate}" ]]; then
-      export CONDA_PREFIX="${candidate}"
-      break
-    fi
-  done
-fi
 
 cmake_args=(
   -S "${ROOT_DIR}"

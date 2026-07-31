@@ -21,9 +21,17 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_ROOT = Path(os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))).expanduser()
 DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(PROJECT_ROOT / "datasets"))).expanduser()
-GLOBAL_PROCESSED = DATASET_ROOT / "processed/DARTH"
-REUSE_ROOT = PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603"
-DEFAULT_RUN_ROOT = PROJECT_ROOT / "index/darth_m32_efc500_efs1000_training10k_5datasets"
+INDEX_ROOT = Path(os.environ.get("SAGE_INDEX_DIR", str(PROJECT_ROOT / "index"))).expanduser()
+GLOBAL_PROCESSED = Path(
+    os.environ.get("SAGE_DARTH_PROCESSED_ROOT", str(DATASET_ROOT / "processed/DARTH"))
+).expanduser()
+REUSE_ROOT = Path(
+    os.environ.get(
+        "SAGE_DARTH_REUSE_ROOT",
+        str(INDEX_ROOT / "m32_efc500_target095_adaef_darth_efs1000_20260603"),
+    )
+).expanduser()
+DEFAULT_RUN_ROOT = INDEX_ROOT / "darth_m32_efc500_efs1000_training10k_5datasets_20260615"
 
 
 DATASETS = {

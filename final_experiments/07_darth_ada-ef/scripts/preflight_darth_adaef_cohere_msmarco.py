@@ -19,7 +19,12 @@ FAISS_INDEX_ROOT = Path(
         str(DEFAULT_PROJECT_ROOT / "index/faiss_m32_efc500_main8_20260707/darth/index"),
     )
 ).expanduser()
-HNSWLIB_INDEX_ROOT = Path(os.environ.get("SAGE_HNSWLIB_INDEX_ROOT", str(DEFAULT_PROJECT_ROOT / "index"))).expanduser()
+HNSWLIB_INDEX_ROOT = Path(
+    os.environ.get(
+        "SAGE_HNSWLIB_INDEX_ROOT",
+        os.environ.get("SAGE_INDEX_DIR", str(DEFAULT_PROJECT_ROOT / "index")),
+    )
+).expanduser()
 
 DARTH_SOURCE_ROOT = Path(
     os.environ.get("SAGE_DARTH_ROOT", str(REPO_ROOT / "baselines/darth/benchmarking-darth"))

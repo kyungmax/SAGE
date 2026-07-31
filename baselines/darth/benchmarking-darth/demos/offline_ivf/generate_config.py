@@ -7,7 +7,7 @@ import os
 import yaml
 
 # with ssnpp sharded data
-root = "/checkpoint/marialomeli/ssnpp_data"
+root = os.environ.get("DARTH_SSNPP_DATA_ROOT", "./artifacts/darth/ssnpp_data")
 file_names = [f"ssnpp_{i:010}.npy" for i in range(20)]
 d = 256
 dt = np.dtype(np.uint8)

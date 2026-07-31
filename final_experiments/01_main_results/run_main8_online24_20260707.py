@@ -26,7 +26,7 @@ OUT_ROOT = ROOT / "main8_online24"
 
 
 def _default_project_root() -> Path:
-    for key in ("HNSW_PLAYGROUND_ROOT", "SAGE_PROJECT_ROOT"):
+    for key in ("SAGE_PROJECT_ROOT",):
         value = os.environ.get(key)
         if value:
             return Path(value).expanduser().resolve()
@@ -129,7 +129,7 @@ def common_sweep_args(*, run_root: Path, final_dir: Path, datasets: Sequence[str
 
 
 def run_hnswlib_cell(*, datasets: Sequence[str], out_root: Path) -> int:
-    os.environ.setdefault("HNSW_PLAYGROUND_ROOT", str(PROJECT_ROOT))
+    os.environ.setdefault("SAGE_PROJECT_ROOT", str(PROJECT_ROOT))
     _prepend_path(HNSW_RUNNER_ROOT)
     _prepend_path(EXPERIMENTS_ROOT)
 
@@ -149,7 +149,7 @@ def run_hnswlib_cell(*, datasets: Sequence[str], out_root: Path) -> int:
 
 
 def run_faiss_cell(*, datasets: Sequence[str], out_root: Path, output_name: str = DEFAULT_FAISS_OUTPUT_NAME) -> int:
-    os.environ.setdefault("HNSW_PLAYGROUND_ROOT", str(PROJECT_ROOT))
+    os.environ.setdefault("SAGE_PROJECT_ROOT", str(PROJECT_ROOT))
     os.environ["FAISS_INDEX_ROOT"] = str(FAISS_INDEX_ROOT)
     os.environ["FAISS_PYTHON_PATH"] = str(FAISS_PYTHON_PATH)
     os.environ["FAISS_OPT_LEVEL"] = "AVX512"

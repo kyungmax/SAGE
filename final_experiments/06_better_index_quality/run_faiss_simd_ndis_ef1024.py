@@ -31,7 +31,7 @@ FAISS_ROOT = EXPERIMENTS_ROOT / "faiss"
 
 DEFAULT_PYTHON_FAISS = REPO_ROOT / "faiss/build_sage_avx512/faiss/python"
 DEFAULT_PROJECT_ROOT = Path(
-    os.environ.get("HNSW_PLAYGROUND_ROOT", os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT)))
+    os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))
 ).expanduser()
 DEFAULT_DATA_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
 DEFAULT_INDEX_DIR = Path(os.environ.get("SAGE_INDEX_DIR", str(DEFAULT_PROJECT_ROOT / "index"))).expanduser()
@@ -570,7 +570,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--tmin-pops", type=int, default=25)
     args = parser.parse_args(argv)
 
-    os.environ.setdefault("HNSW_PLAYGROUND_ROOT", str(DEFAULT_PROJECT_ROOT))
+    os.environ.setdefault("SAGE_PROJECT_ROOT", str(DEFAULT_PROJECT_ROOT))
     os.environ["FAISS_PYTHON_PATH"] = str(Path(args.faiss_python_path).expanduser().resolve())
     os.environ.setdefault("FAISS_OPT_LEVEL", "AVX512")
     for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):

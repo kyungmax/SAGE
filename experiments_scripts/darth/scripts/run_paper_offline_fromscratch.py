@@ -39,15 +39,23 @@ import pandas as pd
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_ROOT = Path(os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))).expanduser()
 DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(PROJECT_ROOT / "datasets"))).expanduser()
+INDEX_ROOT = Path(os.environ.get("SAGE_INDEX_DIR", str(PROJECT_ROOT / "index"))).expanduser()
 COMMON_INDEX_ROOT = Path(
     os.environ.get(
         "SAGE_FAISS_INDEX_ROOT",
-        str(PROJECT_ROOT / "index/faiss_m32_efc500_main8_20260707/darth/index"),
+        os.environ.get(
+            "FAISS_INDEX_ROOT",
+            str(INDEX_ROOT / "faiss_m32_efc500_main8_20260707/darth/index"),
+        ),
     )
 ).expanduser()
-DEFAULT_RUN_ROOT = PROJECT_ROOT / "index/darth_m32_efc500_target095_paper_fromscratch"
-DARTH_ROOT = Path(os.environ.get("SAGE_DARTH_ROOT", str(REPO_ROOT / "baselines/darth/benchmarking-darth"))).expanduser()
-DARTH_BIN = Path(os.environ.get("SAGE_DARTH_BIN", str(DARTH_ROOT / "build-simd-avx512/hnsw-test/hnsw_test"))).expanduser()
+DEFAULT_RUN_ROOT = INDEX_ROOT / "darth_m32_efc500_target095_paper_fromscratch_20260615"
+DARTH_BIN = Path(
+    os.environ.get(
+        "SAGE_DARTH_BIN",
+        str(PROJECT_ROOT / "baselines/darth/benchmarking-darth/build-simd-avx512/hnsw-test/hnsw_test"),
+    )
+).expanduser()
 
 FEATURE_COLUMNS = [
     "step",

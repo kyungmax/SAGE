@@ -28,7 +28,7 @@ import hnswlib  # noqa: E402
 DEFAULT_FALSE_EASY_DIR = REPO_ROOT / "final_analysis/false_easy_analysis"
 DEFAULT_DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(REPO_ROOT / "datasets"))).expanduser()
 DEFAULT_INDEX_DIR = Path(os.environ.get("SAGE_INDEX_DIR", str(REPO_ROOT / "index"))).expanduser()
-DEFAULT_OUTPUT_DIR = DEFAULT_FALSE_EASY_DIR / "first_pass_gt_spread_local_minima"
+DEFAULT_OUTPUT_DIR = DEFAULT_FALSE_EASY_DIR / "first_pass_gt_spread_local_minima_20260622"
 
 CLASSIFY_START = 4
 CLASSIFY_END = 16

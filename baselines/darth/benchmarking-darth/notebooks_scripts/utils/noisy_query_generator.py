@@ -2,6 +2,24 @@ import numpy as np
 import faiss
 import sys
 import os
+from pathlib import Path
+
+
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "faiss").exists() and (parent / "experiments_scripts").exists():
+            return parent
+    return Path(__file__).resolve().parent
+
+
+REPO_ROOT = _repo_root()
+DARTH_ARTIFACT_ROOT = Path(os.environ.get("DARTH_ARTIFACT_ROOT", str(REPO_ROOT / "artifacts" / "darth"))).expanduser()
+DARTH_TRAINING_DATA_ROOT = Path(
+    os.environ.get("DARTH_TRAINING_DATA_ROOT", str(DARTH_ARTIFACT_ROOT / "et_training_data"))
+).expanduser()
+DARTH_RAW_DATA_ROOT = Path(
+    os.environ.get("DARTH_RAW_DATA_ROOT", str(REPO_ROOT / "datasets" / "raw" / "DARTH"))
+).expanduser()
 
 import matplotlib.pyplot as plt
 
@@ -9,7 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from tqdm import tqdm
 
-DATA_DIR = "/data/mchatzakis/datasets/processed"
+DATA_DIR = str(Path(os.environ.get("DARTH_DATASET_ROOT", str(REPO_ROOT / "datasets/processed/DARTH"))).expanduser())
 
 def read_fvecs(file_path, limit=None):
     vectors = None

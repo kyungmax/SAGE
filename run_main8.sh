@@ -8,4 +8,4 @@ if [[ $# -eq 0 ]]; then
   set -- run-all
 fi
 
-exec "$SAGE_PYTHON" "$SAGE_ROOT/final_experiments/01_main_results/run_main8_online24_20260707.py" "$@"
+exec "$SAGE_PYTHON" "$SAGE_PROJECT_ROOT/final_experiments/01_main_results/run_main8_online24_20260707.py" "$@"

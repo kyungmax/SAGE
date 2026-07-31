@@ -22,11 +22,14 @@ if str(EXP_ROOT) not in sys.path:
 
 
 def _find_default_project_root() -> Path:
-    env_root = os.environ.get("HNSW_PLAYGROUND_ROOT")
+    env_root = os.environ.get("SAGE_PROJECT_ROOT")
     if env_root:
         return Path(env_root).expanduser().resolve()
     for candidate in (EXP_ROOT, *EXP_ROOT.parents):
-        if (candidate / "datasets").exists():
+        if (candidate / ".git").exists() or (
+            (candidate / "experiments_scripts").is_dir()
+            and (candidate / "final_experiments").is_dir()
+        ):
             return candidate
     return EXP_ROOT
 
@@ -37,8 +40,11 @@ DEFAULT_CONDA_ENV = os.environ.get("SAGE_FAISS_CONDA_ENV", "hnsw")
 CONDA_REEXEC_SENTINEL = "SAGE_FAISS_CONDA_REEXECED"
 DEFAULT_FAISS_INDEX_ROOT = Path(
     os.environ.get(
-        "FAISS_INDEX_ROOT",
-        str(PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603/darth/index"),
+        "SAGE_FAISS_INDEX_ROOT",
+        os.environ.get(
+            "FAISS_INDEX_ROOT",
+            str(PROJECT_ROOT / "index/faiss_m32_efc500_main8_20260707/darth/index"),
+        ),
     )
 )
 

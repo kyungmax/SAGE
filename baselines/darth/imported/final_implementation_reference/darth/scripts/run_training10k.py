@@ -12,11 +12,29 @@ import time
 from pathlib import Path
 
 
-PROJECT_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground")
-PAPERS_ROOT = PROJECT_ROOT / "trials_on_fixing_search_process/adaptive_efsearch/papers"
-REUSE_ROOT = PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603"
-DEFAULT_RUN_ROOT = PROJECT_ROOT / "index/darth_m32_efc500_efs1000_training10k_5datasets"
-DARTH_BIN = PAPERS_ROOT / "hnsw-ada-ef/benchmarking-darth/build-local/hnsw-test/hnsw_test"
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "faiss").exists() and (parent / "experiments_scripts").exists():
+            return parent
+    raise RuntimeError("cannot locate SAGE repository root")
+
+
+REPO_ROOT = _repo_root()
+PROJECT_ROOT = Path(os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))).expanduser()
+INDEX_ROOT = Path(os.environ.get("SAGE_INDEX_DIR", str(PROJECT_ROOT / "index"))).expanduser()
+REUSE_ROOT = Path(
+    os.environ.get(
+        "SAGE_DARTH_REUSE_ROOT",
+        str(INDEX_ROOT / "m32_efc500_target095_adaef_darth_efs1000_20260603"),
+    )
+).expanduser()
+DEFAULT_RUN_ROOT = INDEX_ROOT / "darth_m32_efc500_efs1000_training10k_5datasets_20260615"
+DARTH_BIN = Path(
+    os.environ.get(
+        "SAGE_DARTH_BIN",
+        str(PROJECT_ROOT / "baselines/darth/benchmarking-darth/build-simd-avx512/hnsw-test/hnsw_test"),
+    )
+).expanduser()
 
 
 DATASETS = {

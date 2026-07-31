@@ -20,7 +20,7 @@ REPO_ROOT = SCRIPT_PATH.parents[3]
 CELL_RUNNER = SCRIPT_PATH.parent / "run_faiss_ablation_cell_with_build_index.py"
 SUMMARY_SCRIPT = SCRIPT_PATH.parent / "summarize_faiss_glove_cohere_ablation.py"
 DEFAULT_PROJECT_ROOT = Path(
-    os.environ.get("HNSW_PLAYGROUND_ROOT", os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT)))
+    os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))
 ).expanduser()
 DEFAULT_DATASET_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
 DEFAULT_INDEX_ROOT = Path(
@@ -33,10 +33,7 @@ DEFAULT_INDEX_ROOT = Path(
     )
 ).expanduser()
 DEFAULT_FAISS_PYTHON_PATH = Path(
-    os.environ.get(
-        "FAISS_PYTHON_PATH",
-        str(REPO_ROOT / "faiss/build_sage_avx512/faiss/python"),
-    )
+    os.environ.get("FAISS_PYTHON_PATH", str(REPO_ROOT / "faiss/build_sage_avx512/faiss/python"))
 ).expanduser()
 DEFAULT_CELL_PYTHON = os.environ.get("SAGE_PYTHON", str(Path(sys.executable)))
 DEFAULT_DATASETS = (

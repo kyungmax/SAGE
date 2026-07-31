@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SAGE_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-ADA_EF_ROOT="${SAGE_ADAEF_ROOT:-${SAGE_ROOT}/experiments_scripts/ada-ef}"
+PROJECT_ROOT="$(cd "${SAGE_PROJECT_ROOT:-${SCRIPT_DIR}/../../..}" && pwd)"
+ADA_EF_ROOT="${SAGE_ADAEF_ROOT:-${PROJECT_ROOT}/experiments_scripts/ada-ef}"
 BUILD_DIR="${SAGE_ADAEF_SIMD_BUILD_DIR:-${ADA_EF_ROOT}/build-simd-avx512}"
 JOBS="${JOBS:-$(nproc)}"
 SIMD_CXX_FLAGS="${SIMD_CXX_FLAGS:--mavx2 -mfma -mf16c -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw -mpopcnt}"

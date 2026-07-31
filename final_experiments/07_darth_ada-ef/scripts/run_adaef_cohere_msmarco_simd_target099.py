@@ -24,7 +24,12 @@ EXP_ROOT = SCRIPT_DIR.parent
 REPO_ROOT = EXP_ROOT.parents[1]
 DEFAULT_PROJECT_ROOT = Path(os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))).expanduser()
 DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
-INDEX_ROOT = Path(os.environ.get("SAGE_HNSWLIB_INDEX_ROOT", str(DEFAULT_PROJECT_ROOT / "index"))).expanduser()
+INDEX_ROOT = Path(
+    os.environ.get(
+        "SAGE_HNSWLIB_INDEX_ROOT",
+        os.environ.get("SAGE_INDEX_DIR", str(DEFAULT_PROJECT_ROOT / "index")),
+    )
+).expanduser()
 ADA_EF_ROOT = Path(os.environ.get("SAGE_ADAEF_ROOT", str(REPO_ROOT / "experiments_scripts/ada-ef"))).expanduser()
 BACKEND_BIN = Path(
     os.environ.get("SAGE_ADAEF_BACKEND_BIN", str(ADA_EF_ROOT / "build-simd-avx512/backend_runner"))

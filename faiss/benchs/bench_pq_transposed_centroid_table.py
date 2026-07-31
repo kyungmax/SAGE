@@ -4,6 +4,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import os
+
 import faiss
 import time
 import random
@@ -87,17 +89,24 @@ def test_bigann10m(index_file, index_parameters):
 
 
 if __name__ == "__main__":
-    faiss.contrib.datasets.dataset_basedir = '/home/aguzhva/ANN_SIFT1B/'
+    dataset_basedir = os.environ.get("FAISS_DATASET_BASEDIR", "data")
+    faiss.contrib.datasets.dataset_basedir = dataset_basedir
 
     # represents OPQ32_128,IVF65536_HNSW32,PQ32 index
-    index_file_1 = "/home/aguzhva/ANN_SIFT1B/run_tests/bench_ivf/indexes/hnsw32/.faissindex"
+    index_file_1 = os.environ.get(
+        "FAISS_BENCH_HNSW32_INDEX",
+        os.path.join(dataset_basedir, "run_tests/bench_ivf/indexes/hnsw32/.faissindex"),
+    )
 
     nprobe_values = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
     quantizer_efsearch_values = [4, 8, 16, 32, 64, 128, 256, 512]
     ht_values = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 74, 76, 78, 80, 82, 84, 86, 88, 90, 92, 94, 96, 98, 100, 102, 104, 106, 108, 110, 112, 114, 116, 118, 120, 122, 124, 126, 128, 256]
 
     # represents OPQ32_128,IVF65536(IVF256,PQHDx4fs,RFlat),PQ32 index
-    index_file_2 = "/home/aguzhva/ANN_SIFT1B/run_tests/bench_ivf/indexes/pq4/.faissindex"
+    index_file_2 = os.environ.get(
+        "FAISS_BENCH_PQ4_INDEX",
+        os.path.join(dataset_basedir, "run_tests/bench_ivf/indexes/pq4/.faissindex"),
+    )
 
     quantizer_k_factor_rf_values = [1, 2, 4, 8, 16, 32, 64]
     quantizer_nprobe_values = [1, 2, 4, 8, 16, 32, 64, 128]

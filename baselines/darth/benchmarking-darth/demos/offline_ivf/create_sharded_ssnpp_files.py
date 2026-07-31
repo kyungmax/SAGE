@@ -48,14 +48,14 @@ if __name__ == "__main__":
         "--filepath",
         dest="filepath",
         type=str,
-        default="/datasets01/big-ann-challenge-data/FB_ssnpp/FB_ssnpp_database.u8bin",
+        default=os.environ.get("DARTH_SSNPP_DATABASE", "./datasets/raw/DARTH/FB_ssnpp_database.u8bin"),
         help="path of 1B ssnpp database vectors' original file",
     )
     parser.add_argument(
         "--filepath",
         dest="output_dir",
         type=str,
-        default="/checkpoint/marialomeli/ssnpp_data",
+        default=os.environ.get("DARTH_SSNPP_DATA_ROOT", "./artifacts/darth/ssnpp_data"),
         help="path to put sharded files",
     )
 

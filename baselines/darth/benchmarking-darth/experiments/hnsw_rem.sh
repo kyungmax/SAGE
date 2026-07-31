@@ -1,3 +1,6 @@
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SAGE_PROJECT_ROOT:-${SCRIPT_DIR}/../../../..}" && pwd)"
+
 cd ..
 cmake -DFAISS_ENABLE_GPU=OFF -DBUILD_SHARED_LIBS=ON -B build -S .
 make -C build -j faiss
@@ -10,9 +13,9 @@ echo "============================="
 echo ""
 echo ""
 
-INDEX_DIRECTORY=/data/mchatzakis/index/hnsw-index
-DATASET_DIRECTORY=/data/mchatzakis/datasets/processed/
-RESULTS_DIRECTORY=/home/mchatzakis/cfaiss/experiments/results
+INDEX_DIRECTORY=${DARTH_HNSW_INDEX_ROOT:-${REPO_ROOT}/index/DARTH/hnsw-index}
+DATASET_DIRECTORY=${DARTH_DATASET_ROOT:-${REPO_ROOT}/datasets/processed/DARTH}
+RESULTS_DIRECTORY=${DARTH_RESULTS_ROOT:-${REPO_ROOT}/artifacts/darth/results}
 
 sample=1000
 experiment_times=1

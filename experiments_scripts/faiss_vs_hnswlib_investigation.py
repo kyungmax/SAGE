@@ -28,13 +28,13 @@ FINAL_IMPL = Path(__file__).resolve().parent
 PAPERS_OURS = FINAL_IMPL.parent
 PROJECT_ROOT = Path(os.environ.get("SAGE_PROJECT_ROOT", str(PAPERS_OURS))).expanduser()
 OUT_DIR = PAPERS_OURS / "final_analysis/faiss_vs_hnswlib"
-INDEX_ROOT = Path(os.environ.get("SAGE_INDEX_DIR", str(PROJECT_ROOT / "index"))).expanduser()
-DATASET_ROOT = Path(os.environ.get("SAGE_DATA_DIR", str(PROJECT_ROOT / "datasets"))).expanduser()
+INDEX_ROOT = PROJECT_ROOT / "index"
+DATASET_ROOT = PROJECT_ROOT / "datasets"
 FAISS_PYTHON = Path(
-    os.environ.get("FAISS_PYTHON_PATH", str(PAPERS_OURS / "faiss/build_sage_avx512/faiss/python"))
+    os.environ.get("FAISS_PYTHON_PATH", str(PROJECT_ROOT / "faiss/build_sage_avx512/faiss/python"))
 ).expanduser()
 FAISS_COMPAT = FINAL_IMPL / "faiss"
-HNSWLIB_EXTENSION_ROOT = Path(os.environ.get("SAGE_HNSWLIB_EXTENSION_ROOT", str(PAPERS_OURS / "hnswlib"))).expanduser()
+HNSWLIB_EXTENSION_ROOT = Path(os.environ.get("SAGE_HNSWLIB_EXTENSION_ROOT", str(PROJECT_ROOT / "hnswlib"))).expanduser()
 
 FAISS_SWEEP = (
     PAPERS_OURS

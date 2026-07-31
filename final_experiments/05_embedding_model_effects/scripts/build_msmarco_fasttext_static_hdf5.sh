@@ -3,8 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-DATASET_DIR="${SAGE_DATA_DIR:-$REPO_ROOT/datasets}"
+REPO_ROOT="$(cd "${SAGE_PROJECT_ROOT:-${SCRIPT_DIR}/../../..}" && pwd)"
+DATASET_DIR="${SAGE_DATA_DIR:-${REPO_ROOT}/datasets}"
 PYTHON="${SAGE_PYTHON:-python3}"
 
 COLLECTION_TSV="${COLLECTION_TSV:-${DATASET_DIR}/msmarco_passage_glove_static/raw/collection.tsv}"

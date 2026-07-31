@@ -20,12 +20,9 @@ EXPERIMENTS_SCRIPT_ROOT = EXP_ROOT.parent
 
 
 def _find_default_project_root() -> Path:
-    env_root = os.environ.get("HNSW_PLAYGROUND_ROOT")
+    env_root = os.environ.get("SAGE_PROJECT_ROOT")
     if env_root:
         return Path(env_root).expanduser().resolve()
-    for candidate in (EXP_ROOT, *EXP_ROOT.parents):
-        if (candidate / "datasets").exists():
-            return candidate
     return EXPERIMENTS_SCRIPT_ROOT.parent
 
 

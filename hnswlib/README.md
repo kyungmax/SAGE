@@ -1,3 +1,20 @@
+# hnswlib + SAGE Artifact Notes
+
+This directory contains the hnswlib source tree used by the SAGE artifact. The
+Python extension is built from this local directory; experiment wrappers default
+to `$SAGE_PROJECT_ROOT/hnswlib` and can be overridden with
+`SAGE_HNSWLIB_EXTENSION_ROOT`.
+
+Build from the repository root with:
+
+```bash
+export SAGE_PROJECT_ROOT=/path/to/SAGE
+cd $SAGE_PROJECT_ROOT/hnswlib
+python3 -m pip install -e .
+```
+
+The original upstream hnswlib README follows.
+
 # Hnswlib - fast approximate nearest neighbor search
 Header-only C++ HNSW implementation with python bindings, insertions and updates.
 

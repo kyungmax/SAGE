@@ -10,8 +10,9 @@ from typing import Sequence
 
 import h5py
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_PROJECT_ROOT = Path(
-    os.environ.get("HNSW_PLAYGROUND_ROOT", os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT)))
+    os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))
 ).expanduser()
 DEFAULT_DATA_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
 DEFAULT_INDEX_ROOT = Path(

@@ -36,6 +36,7 @@ def find_rabitq_root() -> Path:
 
 
 REPO = find_rabitq_root()
+PROJECT_ROOT = REPO.parent if REPO.name == "rabitq" else REPO
 sys.path.insert(0, str(REPO / "sample/python"))
 sys.path.insert(0, str(REPO / "python_bindings"))
 
@@ -62,7 +63,7 @@ def env_path(name: str, default: Path) -> Path:
     return Path(os.environ.get(name, str(default))).expanduser()
 
 
-DATA_DIR = env_path("RABITQ_DATA_DIR", REPO / "datasets")
+DATA_DIR = env_path("RABITQ_DATA_DIR", PROJECT_ROOT / "datasets")
 MSSPACEV_RAW = env_path("RABITQ_MSSPACEV_RAW", DATA_DIR / "spacev100m_raw/spacev100m_base.i8bin")
 
 
@@ -125,11 +126,11 @@ def default_index_dir(m: int, ef_construction: int) -> Path:
     configured = os.environ.get("RABITQ_INDEX_DIR")
     if configured:
         return Path(configured).expanduser()
-    return REPO / "artifacts" / f"rabitq_m{int(m)}_efc{int(ef_construction)}"
+    return PROJECT_ROOT / "artifacts" / "rabitq" / f"rabitq_m{int(m)}_efc{int(ef_construction)}"
 
 
 def default_output_path() -> str:
-    return str(env_path("RABITQ_OUT_DIR", REPO / "artifacts") / "rabitq_paper_lid_hide_node_recall_qps.csv")
+    return str(env_path("RABITQ_OUT_DIR", PROJECT_ROOT / "artifacts" / "rabitq") / "rabitq_paper_lid_hide_node_recall_qps.csv")
 
 
 def index_path(index_dir: Path, name: str, args: argparse.Namespace) -> Path:

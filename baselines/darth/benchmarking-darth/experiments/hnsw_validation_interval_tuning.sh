@@ -1,3 +1,6 @@
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SAGE_PROJECT_ROOT:-${SCRIPT_DIR}/../../../..}" && pwd)"
+
 cmake -DFAISS_ENABLE_GPU=OFF -DBUILD_SHARED_LIBS=ON -B build -S .
 make -C build -j faiss
 make -C build -j hnsw_test
@@ -17,8 +20,8 @@ train_queries=10000
 li=2
 experiment_times=1
 
-INDEX_DIRECTORY=/home/mchatzakis/hnsw-index
-DATASET_DIRECTORY=/data/mchatzakis/datasets/processed/
+INDEX_DIRECTORY=${DARTH_HNSW_INDEX_ROOT:-${REPO_ROOT}/index/DARTH/hnsw-index}
+DATASET_DIRECTORY=${DARTH_DATASET_ROOT:-${REPO_ROOT}/datasets/processed/DARTH}
 
 dataset_params=(
     #"SIFT100M 32 500 500"

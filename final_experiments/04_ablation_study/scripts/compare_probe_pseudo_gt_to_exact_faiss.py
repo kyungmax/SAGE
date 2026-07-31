@@ -30,7 +30,7 @@ from common.projected_local_acceptable_runtime import _select_dummy_queries  # n
 import final_index_utils  # noqa: E402
 
 DEFAULT_PROJECT_ROOT = Path(
-    os.environ.get("HNSW_PLAYGROUND_ROOT", os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT)))
+    os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))
 ).expanduser()
 DEFAULT_DATA_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_ROOT / "datasets"))).expanduser()
 DEFAULT_INDEX_ROOT = Path(
@@ -43,10 +43,7 @@ DEFAULT_INDEX_ROOT = Path(
     )
 ).expanduser()
 DEFAULT_FAISS_PYTHON_PATH = Path(
-    os.environ.get(
-        "FAISS_PYTHON_PATH",
-        str(REPO_ROOT / "faiss/build_sage_avx512/faiss/python"),
-    )
+    os.environ.get("FAISS_PYTHON_PATH", str(REPO_ROOT / "faiss/build_sage_avx512/faiss/python"))
 ).expanduser()
 DEFAULT_DATASETS = (
     "glove-100-angular.hdf5",

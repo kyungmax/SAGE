@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "${SAGE_PROJECT_ROOT:-${SCRIPT_DIR}/../..}" && pwd)"
 OUT_ROOT="${OUT_ROOT:-${SCRIPT_DIR}/sage_ablation_faiss_glove_cohere_24t_m32_efc500_ef1024}"
 LOG_DIR="${OUT_ROOT}/logs"
 LOG="${LOG_DIR}/run_faiss_glove_cohere_ablation_24t.log"
@@ -15,7 +15,7 @@ export OMP_NUM_THREADS=24
 export OPENBLAS_NUM_THREADS=24
 export MKL_NUM_THREADS=24
 export NUMEXPR_NUM_THREADS=24
-export FAISS_PYTHON_PATH="${FAISS_PYTHON_PATH:-$REPO_ROOT/faiss/build_sage_avx512/faiss/python}"
+export FAISS_PYTHON_PATH="${FAISS_PYTHON_PATH:-${REPO_ROOT}/faiss/build_sage_avx512/faiss/python}"
 
 cd "${SCRIPT_DIR}"
 

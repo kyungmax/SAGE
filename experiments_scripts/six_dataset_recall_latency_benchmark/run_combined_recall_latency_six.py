@@ -26,8 +26,24 @@ SCRIPT_PATH = Path(__file__).resolve()
 EXPERIMENTS_SCRIPT_ROOT = next(
     parent for parent in SCRIPT_PATH.parents if parent.name == "experiments_scripts"
 )
-SAGE_ROOT = EXPERIMENTS_SCRIPT_ROOT.parent
-EXPERIMENT_ROOT = SAGE_ROOT / "final_experiments" / "combined_recall_latency_six_m32_efc500"
+DETECTED_PROJECT_ROOT = EXPERIMENTS_SCRIPT_ROOT.parent
+
+
+def _find_default_project_root() -> Path:
+    env_root = os.environ.get("SAGE_PROJECT_ROOT")
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+    for candidate in (DETECTED_PROJECT_ROOT, *DETECTED_PROJECT_ROOT.parents):
+        if (candidate / ".git").exists() or (
+            (candidate / "experiments_scripts").is_dir()
+            and (candidate / "final_experiments").is_dir()
+        ):
+            return candidate
+    return DETECTED_PROJECT_ROOT
+
+
+PROJECT_ROOT = _find_default_project_root()
+EXPERIMENT_ROOT = PROJECT_ROOT / "final_experiments" / "combined_recall_latency_six_m32_efc500"
 
 HNSW_RUNNER = EXPERIMENTS_SCRIPT_ROOT / "hnswlib" / "run_main_qps_latency_sweep.py"
 FAISS_RUNNER = EXPERIMENTS_SCRIPT_ROOT / "faiss" / "run_faiss_vanilla_ours_ef_sweep.py"
@@ -52,17 +68,13 @@ BASELINE_ROOT = EXPERIMENT_ROOT / "baseline_results_m32_efc500_target095_efs1000
 OUTPUT_DIR = EXPERIMENT_ROOT / "outputs_experiment_scripts_ncal100"
 HNSW_DRILLDOWN_SUBDIR = "hnswlib_easy_medium_hard_drilldown_pseudogt4096_groupdef1024"
 
-def _find_default_project_root() -> Path:
-    env_root = os.environ.get("HNSW_PLAYGROUND_ROOT") or os.environ.get("SAGE_ROOT")
-    if env_root:
-        return Path(env_root).expanduser().resolve()
-    for candidate in (SAGE_ROOT, *SAGE_ROOT.parents):
-        if (candidate / "datasets").exists():
-            return candidate
-    return SAGE_ROOT
-
-
-PROJECT_ROOT = _find_default_project_root()
+DEFAULT_DATA_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(PROJECT_ROOT / "datasets")))
+DEFAULT_HNSW_INDEX_ROOT = Path(
+    os.environ.get(
+        "SAGE_HNSWLIB_INDEX_ROOT",
+        os.environ.get("SAGE_INDEX_DIR", str(PROJECT_ROOT / "index")),
+    )
+)
 DEFAULT_FAISS_PYTHON_PATH = Path(
     os.environ.get(
         "FAISS_PYTHON_PATH",
@@ -71,8 +83,11 @@ DEFAULT_FAISS_PYTHON_PATH = Path(
 )
 DEFAULT_FAISS_INDEX_ROOT = Path(
     os.environ.get(
-        "SAGE_INDEX_DIR",
-        str(PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603/darth/index"),
+        "SAGE_FAISS_INDEX_ROOT",
+        os.environ.get(
+            "FAISS_INDEX_ROOT",
+            str(PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603/darth/index"),
+        ),
     )
 )
 DEFAULT_PYTHON = Path(os.environ.get("SAGE_PYTHON", sys.executable))
@@ -107,6 +122,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-calibration-queries", type=int, default=100)
     parser.add_argument("--mixed-threshold-mode", default="paper_floor_half")
     parser.add_argument("--mixed-bucket-count", type=int, default=4)
+    parser.add_argument("--base-path", type=Path, default=DEFAULT_DATA_DIR)
+    parser.add_argument("--hnsw-index-root", type=Path, default=DEFAULT_HNSW_INDEX_ROOT)
     parser.add_argument("--faiss-python-path", type=Path, default=DEFAULT_FAISS_PYTHON_PATH)
     parser.add_argument("--faiss-index-root", type=Path, default=DEFAULT_FAISS_INDEX_ROOT)
     parser.add_argument(
@@ -195,7 +212,7 @@ def run_cmd(step: str, cmd: Sequence[object], *, dry_run: bool) -> None:
         log.flush()
         process = subprocess.Popen(
             [str(part) for part in cmd],
-            cwd=str(SAGE_ROOT),
+            cwd=str(PROJECT_ROOT),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -253,6 +270,10 @@ def build_hnsw_cmd(args: argparse.Namespace) -> list[object]:
         HNSW_RUN_ROOT,
         "--final-dir",
         HNSW_FINAL_DIR,
+        "--base-path",
+        Path(args.base_path).expanduser(),
+        "--index-dir",
+        Path(args.hnsw_index_root).expanduser(),
     ]
     maybe_add_common_sweep_args(cmd, args)
     if args.enable_hnsw_drilldown:
@@ -282,6 +303,8 @@ def build_faiss_cmd(args: argparse.Namespace) -> list[object]:
         Path(args.faiss_index_root).expanduser(),
         "--dataset-preset",
         "latest6",
+        "--base-path",
+        Path(args.base_path).expanduser(),
         "--run-root",
         FAISS_RUN_ROOT,
         "--final-dir",

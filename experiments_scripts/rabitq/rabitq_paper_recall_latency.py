@@ -13,6 +13,7 @@ import numpy as np
 from matplotlib.ticker import MaxNLocator
 
 REPO = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = REPO
 BASE_METHOD = "RaBitQ"
 ADAPTIVE_METHOD = "RaBitQ+SAGE"
 METHODS = [BASE_METHOD, ADAPTIVE_METHOD]
@@ -52,7 +53,7 @@ def canonical_dataset(name: str) -> str:
 
 
 def default_plot_dir() -> str:
-    return str(Path(os.environ.get("RABITQ_PLOT_DIR", REPO / "artifacts" / "plots")).expanduser())
+    return str(Path(os.environ.get("RABITQ_PLOT_DIR", PROJECT_ROOT / "artifacts" / "rabitq" / "plots")).expanduser())
 
 
 def read_rows(path: Path) -> list[dict]:

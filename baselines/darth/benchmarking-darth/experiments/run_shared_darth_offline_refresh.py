@@ -85,10 +85,7 @@ def resolve_predictor_python(path_value: str) -> str:
     env_override = os.environ.get("DARTH_PREDICTOR_PYTHON", "") or os.environ.get("HNSW_PYTHON", "")
     if env_override:
         return str(Path(env_override).expanduser().resolve())
-    preferred = Path("/home/kyungmin/anaconda3/envs/hnsw/bin/python3")
-    if preferred.exists():
-        return str(preferred)
-    return "python3"
+    return os.environ.get("SAGE_PYTHON", "python3")
 
 
 def resolve_results_root(path_value: str, *, m: int, efc: int, k: int) -> Path:

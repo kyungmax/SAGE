@@ -6,17 +6,15 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 
-SCRIPT_PATH = Path(__file__).resolve()
-EFFECTS_DIR = SCRIPT_PATH.parents[1]
-REPO_ROOT = SCRIPT_PATH.parents[3]
-PROJECT_ROOT = Path(
-    os.environ.get("HNSW_PLAYGROUND_ROOT", os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT)))
-).expanduser()
-DATASET_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(PROJECT_ROOT / "datasets"))).expanduser()
-PYTHON = Path(os.environ.get("SAGE_PYTHON", "python3")).expanduser()
+REPO_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT))).expanduser()
+EFFECTS_DIR = REPO_ROOT / "final_experiments/05_embedding_model_effects"
+DATASET_DIR = PROJECT_ROOT / "datasets"
+PYTHON = Path(os.environ.get("SAGE_PYTHON", sys.executable)).expanduser()
 
 DEFAULT_COLLECTION_TSV = DATASET_DIR / "msmarco_passage_glove_static/raw/collection.tsv"
 DEFAULT_QUERIES_TSV = DATASET_DIR / "msmarco_passage_glove_static/raw/queries.dev.tsv"

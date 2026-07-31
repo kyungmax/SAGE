@@ -1,4 +1,22 @@
 import os
+from pathlib import Path
+
+
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "faiss").exists() and (parent / "experiments_scripts").exists():
+            return parent
+    return Path(__file__).resolve().parent
+
+
+REPO_ROOT = _repo_root()
+DARTH_ARTIFACT_ROOT = Path(os.environ.get("DARTH_ARTIFACT_ROOT", str(REPO_ROOT / "artifacts" / "darth"))).expanduser()
+DARTH_TRAINING_DATA_ROOT = Path(
+    os.environ.get("DARTH_TRAINING_DATA_ROOT", str(DARTH_ARTIFACT_ROOT / "et_training_data"))
+).expanduser()
+DARTH_RAW_DATA_ROOT = Path(
+    os.environ.get("DARTH_RAW_DATA_ROOT", str(REPO_ROOT / "datasets" / "raw" / "DARTH"))
+).expanduser()
 import json
 
 from tqdm import tqdm
@@ -52,7 +70,7 @@ model_conf = {
 }
 
 def get_validation_dataset_name(nlist, nprobe, query_num, ds_name, k, logint): 
-    return f"/data/mchatzakis/et_training_data/ivf/training-data-generation/validation/{ds_name}/{k}/nlist{nlist}_nprobe{nprobe}_qs{query_num}_li{logint}.txt"
+    return str(DARTH_TRAINING_DATA_ROOT / f"ivf/training-data-generation/validation/{ds_name}/{k}/nlist{nlist}_nprobe{nprobe}_qs{query_num}_li{logint}.txt")
 
 results = {}
 file_path = "../experiments/generated_json/ivf/ivf_predictor_validation_results.json"

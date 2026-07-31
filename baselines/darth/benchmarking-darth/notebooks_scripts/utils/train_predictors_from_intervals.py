@@ -54,7 +54,10 @@ def _default_darth_index_root() -> Path:
         return Path(os.environ["DARTH_INDEX_ROOT"]).expanduser().resolve()
     if os.environ.get("INDEX_ROOT"):
         return (Path(os.environ["INDEX_ROOT"]).expanduser().resolve() / "DARTH").resolve()
-    return Path("/home/kyungmin/vectordb/hnsw-playground/index/DARTH").resolve()
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "faiss").exists() and (parent / "experiments_scripts").exists():
+            return Path(os.environ.get("DARTH_INDEX_ROOT", str(parent / "index/DARTH"))).resolve()
+    return Path(os.environ["DARTH_INDEX_ROOT"]).expanduser().resolve()
 
 
 def parse_args() -> argparse.Namespace:

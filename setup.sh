@@ -11,7 +11,7 @@ mkdir -p "$SAGE_FAISS_INDEX_ROOT"
 cat <<EOF
 SAGE artifact directories are ready.
 
-  SAGE_ROOT=$SAGE_ROOT
+  SAGE_PROJECT_ROOT=$SAGE_PROJECT_ROOT
   SAGE_DATA_DIR=$SAGE_DATA_DIR
   SAGE_INDEX_DIR=$SAGE_INDEX_DIR
   SAGE_FAISS_INDEX_ROOT=$SAGE_FAISS_INDEX_ROOT
@@ -19,7 +19,7 @@ SAGE artifact directories are ready.
 
 Before running experiments in a new shell, load the same defaults with:
 
-  source "$SAGE_ROOT/sage_env.sh"
+  source "$SAGE_PROJECT_ROOT/sage_env.sh"
 
 Place HDF5 datasets under SAGE_DATA_DIR and prebuilt indexes under SAGE_INDEX_DIR.
 EOF

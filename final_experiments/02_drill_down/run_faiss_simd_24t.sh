@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$ROOT/../.." && pwd)"
+REPO_ROOT="$(cd "${SAGE_PROJECT_ROOT:-$ROOT/../..}" && pwd)"
 PY="${SAGE_PYTHON:-python3}"
 
 DATASETS="${SAGE_DRILLDOWN_DATASETS:-glove-100-angular.hdf5,nytimes-256-angular.hdf5,msmarco-v1-openai-ada2-full-ip.hdf5,msspacev-100M-i8-euclidean.hdf5,cohere-768-angular.hdf5,youtube-15M-angular.hdf5,agnews-mxbai-1024-euclidean.hdf5,landmark-nomic-768-angular.hdf5}"

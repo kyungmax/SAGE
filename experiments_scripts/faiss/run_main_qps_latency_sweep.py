@@ -24,11 +24,14 @@ if str(EXPERIMENTS_SCRIPT_ROOT) not in sys.path:
 
 
 def _find_default_project_root() -> Path:
-    env_root = os.environ.get("HNSW_PLAYGROUND_ROOT")
+    env_root = os.environ.get("SAGE_PROJECT_ROOT")
     if env_root:
         return Path(env_root).expanduser().resolve()
     for candidate in (EXP_ROOT, *EXP_ROOT.parents):
-        if (candidate / "datasets").exists():
+        if (candidate / ".git").exists() or (
+            (candidate / "experiments_scripts").is_dir()
+            and (candidate / "final_experiments").is_dir()
+        ):
             return candidate
     return EXP_ROOT
 

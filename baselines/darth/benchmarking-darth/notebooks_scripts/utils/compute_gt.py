@@ -1,6 +1,25 @@
 import numpy as np
 import faiss
 from tqdm import tqdm
+import os
+from pathlib import Path
+
+
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "faiss").exists() and (parent / "experiments_scripts").exists():
+            return parent
+    return Path(__file__).resolve().parent
+
+
+REPO_ROOT = _repo_root()
+DARTH_ARTIFACT_ROOT = Path(os.environ.get("DARTH_ARTIFACT_ROOT", str(REPO_ROOT / "artifacts" / "darth"))).expanduser()
+DARTH_TRAINING_DATA_ROOT = Path(
+    os.environ.get("DARTH_TRAINING_DATA_ROOT", str(DARTH_ARTIFACT_ROOT / "et_training_data"))
+).expanduser()
+DARTH_RAW_DATA_ROOT = Path(
+    os.environ.get("DARTH_RAW_DATA_ROOT", str(REPO_ROOT / "datasets" / "raw" / "DARTH"))
+).expanduser()
 
 def read_bvecs(file_path, limit=None):
     vectors = None
@@ -97,19 +116,19 @@ def write_ivecs(file_name, indices, k):
 
 dataset_info = {
     "SIFT10M": {
-        "base_filepath": "/data/mchatzakis/datasets/SIFT1B/bigann_base.bvecs",
+        "base_filepath": str(DARTH_RAW_DATA_ROOT / "SIFT1B/bigann_base.bvecs"),
         "index_vectors_num": 10000000,
-        "train_filepath": "/data/mchatzakis/datasets/SIFT1B/bigann_learn.bvecs",
+        "train_filepath": str(DARTH_RAW_DATA_ROOT / "SIFT1B/bigann_learn.bvecs"),
         "num_queries": 1000000,
-        "gt_dir": "/data/mchatzakis/datasets/SIFT1B/bigann_learn_gt",
+        "gt_dir": str(DARTH_RAW_DATA_ROOT / "SIFT1B/bigann_learn_gt"),
         "k": 1000,
         "d": 128,
         "read_function": read_bvecs
     },
     "DEEP10M": {
-        "base_filepath": "/data/mchatzakis/datasets/DEEP1B/base.1B.fbin",
-        "train_filepath": "/data/mchatzakis/datasets/DEEP1B/learn.350M.fbin",
-        "gt_dir": "/data/mchatzakis/datasets/DEEP1B/groundtruth_learn",
+        "base_filepath": str(DARTH_RAW_DATA_ROOT / "DEEP1B/base.1B.fbin"),
+        "train_filepath": str(DARTH_RAW_DATA_ROOT / "DEEP1B/learn.350M.fbin"),
+        "gt_dir": str(DARTH_RAW_DATA_ROOT / "DEEP1B/groundtruth_learn"),
         "index_vectors_num": 10000000,
         "num_queries": 1000000,
         "k": 1000,
@@ -117,9 +136,9 @@ dataset_info = {
         "read_function": read_fbin_vecs
     },
     "GIST1M": {
-        "base_filepath": "/data/mchatzakis/datasets/GIST1M/gist/gist_base.fvecs",
-        "train_filepath": "/data/mchatzakis/datasets/GIST1M/gist/gist_learn.fvecs",
-        "gt_dir": "/data/mchatzakis/datasets/GIST1M/gist/gist_groundtruth_learn",
+        "base_filepath": str(DARTH_RAW_DATA_ROOT / "GIST1M/gist/gist_base.fvecs"),
+        "train_filepath": str(DARTH_RAW_DATA_ROOT / "GIST1M/gist/gist_learn.fvecs"),
+        "gt_dir": str(DARTH_RAW_DATA_ROOT / "GIST1M/gist/gist_groundtruth_learn"),
         "index_vectors_num": 1000000,
         "num_queries": 500000,
         "k": 1000,
@@ -127,9 +146,9 @@ dataset_info = {
         "read_function": read_fvecs
     }, 
     "GLOVE100": {
-        "base_filepath": "/data/mchatzakis/datasets/GloVe/glove-100_base.fvecs",
-        "train_filepath": "/data/mchatzakis/datasets/GloVe/glove-100_learn_350K.fvecs",#",
-        "gt_dir": "/data/mchatzakis/datasets/GloVe/glove-100_groundtruth_learn",
+        "base_filepath": str(DARTH_RAW_DATA_ROOT / "GloVe/glove-100_base.fvecs"),
+        "train_filepath": str(DARTH_RAW_DATA_ROOT / "GloVe/glove-100_learn_350K.fvecs"),#",
+        "gt_dir": str(DARTH_RAW_DATA_ROOT / "GloVe/glove-100_groundtruth_learn"),
         "index_vectors_num": 1183514,
         "num_queries": 350000,
         "k": 1000,

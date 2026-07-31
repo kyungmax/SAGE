@@ -76,21 +76,23 @@ The Python scripts compute and save the policy. The actual online bucket decisio
 Install the RaBitQ Python package and Python dependencies:
 
 ```bash
-cd /path/to/SAGE/rabitq
+export SAGE_PROJECT_ROOT=/path/to/SAGE
+cd $SAGE_PROJECT_ROOT/rabitq
 python -m pip install -v .
 python -m pip install h5py matplotlib numpy pandas
 ```
 
-Set paths from the SAGE repository root:
+Set paths from the SAGE repository root. These are also the script defaults, except `RABITQ_MSSPACEV_RAW` is shown explicitly because MSSPACEV needs its raw i8bin file:
 
 ```bash
-cd /path/to/SAGE
-export RABITQ_REPO_DIR="$PWD/rabitq"
-export RABITQ_DATA_DIR=/path/to/datasets
-export RABITQ_MSSPACEV_RAW=/path/to/datasets/spacev100m_raw/spacev100m_base.i8bin
-export RABITQ_INDEX_DIR=/path/to/artifacts/rabitq_m32_efc500
-export RABITQ_OUT_DIR=/path/to/artifacts/results
-export RABITQ_PLOT_DIR=/path/to/artifacts/plots
+export SAGE_PROJECT_ROOT=/path/to/SAGE
+cd $SAGE_PROJECT_ROOT
+export RABITQ_REPO_DIR="$SAGE_PROJECT_ROOT/rabitq"
+export RABITQ_DATA_DIR="$SAGE_PROJECT_ROOT/datasets"
+export RABITQ_MSSPACEV_RAW="$RABITQ_DATA_DIR/spacev100m_raw/spacev100m_base.i8bin"
+export RABITQ_INDEX_DIR="$SAGE_PROJECT_ROOT/artifacts/rabitq/rabitq_m32_efc500"
+export RABITQ_OUT_DIR="$SAGE_PROJECT_ROOT/artifacts/rabitq"
+export RABITQ_PLOT_DIR="$SAGE_PROJECT_ROOT/artifacts/rabitq/plots"
 ```
 
 Supported dataset aliases are `agnews`, `cohere`, `msspacev`, and `youtube`. The data directory should contain the corresponding `.hdf5` files with `train`, `test`, and `neighbors`; MSSPACEV also needs the raw i8bin path above.

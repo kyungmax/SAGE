@@ -2,6 +2,9 @@
 # This script generates the baseline runs that do not use Early Termination at all.
 # It generated the baseline results both for validation and testing sets
 #
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SAGE_PROJECT_ROOT:-${SCRIPT_DIR}/../../../..}" && pwd)"
+
 cd ..
 cmake -DFAISS_ENABLE_GPU=OFF -DBUILD_SHARED_LIBS=ON -B build -S .
 make -C build -j faiss
@@ -26,9 +29,9 @@ dataset_params=(
 
 k_values=(50)
 
-INDEX_DIRECTORY=/data/mchatzakis/index/ivf-index
-DATASET_DIRECTORY=/data/mchatzakis/datasets/processed/
-RESULTS_DIRECTORY=/home/mchatzakis/cfaiss/experiments/ivf-results
+INDEX_DIRECTORY=${DARTH_IVF_INDEX_ROOT:-${REPO_ROOT}/index/DARTH/ivf-index}
+DATASET_DIRECTORY=${DARTH_DATASET_ROOT:-${REPO_ROOT}/datasets/processed/DARTH}
+RESULTS_DIRECTORY=${DARTH_IVF_RESULTS_ROOT:-${REPO_ROOT}/artifacts/darth/ivf-results}
 
 for query_type in testing
 do
