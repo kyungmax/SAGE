@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare Vanilla vs SAGE/Ours HNSW distance computations by backend.
 
-The runner measures Vanilla ndis with the native layer-0 CHR summary API and
+The runner measures Vanilla ndis with the native layer-0 CFR summary API and
 reconstructs Ours ndis by gathering each query's Vanilla ndis at its routed
 efSearch. This is the same accounting used by the saved Qwen distance-count
 analysis: for paper-bucket SAGE, once a query is classified into a route,
@@ -62,18 +62,18 @@ def parse_signature(value: Any, *, kind: str) -> tuple[int | float, ...]:
     raise ValueError(f'unsupported signature kind: {kind!r}')
 
 
-def route_ef_for_chr_ratio(
+def route_ef_for_cfr_ratio(
     *,
     selection_ef: int,
     k: int,
     route_efs: tuple[int, ...],
     bucket_gamma_ratios: tuple[float, ...],
-    chr_ratio: float,
+    cfr_ratio: float,
 ) -> int:
-    if not np.isfinite(chr_ratio):
+    if not np.isfinite(cfr_ratio):
         return int(selection_ef)
     for route_ef, gamma in zip(route_efs, bucket_gamma_ratios):
-        if float(chr_ratio) <= float(gamma) + 1e-12:
+        if float(cfr_ratio) <= float(gamma) + 1e-12:
             return max(int(k), int(route_ef))
     return int(selection_ef)
 
@@ -144,13 +144,13 @@ def load_backend_index(
     raise ValueError(f'unknown backend: {spec.name!r}')
 
 
-def call_chr_summary(index, queries: np.ndarray, *, k: int, ef: int, num_threads: int) -> dict[str, np.ndarray]:
-    method = getattr(index, 'search_layer0_chr_summary_batch', None)
+def call_cfr_summary(index, queries: np.ndarray, *, k: int, ef: int, num_threads: int) -> dict[str, np.ndarray]:
+    method = getattr(index, 'search_layer0_cfr_summary_batch', None)
     if method is not None:
         return method(queries, k=int(k), ef=int(ef), num_threads=int(num_threads))
-    method = getattr(index, 'search_layer0_chr_summary', None)
+    method = getattr(index, 'search_layer0_cfr_summary', None)
     if method is None:
-        raise RuntimeError('index does not expose search_layer0_chr_summary[_batch]')
+        raise RuntimeError('index does not expose search_layer0_cfr_summary[_batch]')
     try:
         return method(queries, k=int(k), ef=int(ef), num_threads=int(num_threads))
     except TypeError:
@@ -225,8 +225,8 @@ def measure_backend(
 
     summaries: dict[int, dict[str, np.ndarray]] = {}
     for ef in sorted(needed_efs):
-        print(f'[{spec.name}] chr_summary ef={ef}', flush=True)
-        summaries[int(ef)] = call_chr_summary(index, queries, k=k, ef=int(ef), num_threads=num_threads)
+        print(f'[{spec.name}] cfr_summary ef={ef}', flush=True)
+        summaries[int(ef)] = call_cfr_summary(index, queries, k=k, ef=int(ef), num_threads=num_threads)
 
     long_rows: list[dict[str, Any]] = []
     summary_rows: list[dict[str, Any]] = []
@@ -247,21 +247,21 @@ def measure_backend(
 
         anchor = summaries[int(ef)]
         vanilla_counts = np.asarray(anchor['distance_counts'], dtype=np.float64)
-        chr_values = np.asarray(anchor['mean_smoothed_cfrs'], dtype=np.float64)
-        usable = np.asarray(anchor.get('usable_flags', np.isfinite(chr_values)), dtype=bool)
+        cfr_values = np.asarray(anchor['mean_smoothed_cfrs'], dtype=np.float64)
+        usable = np.asarray(anchor.get('usable_flags', np.isfinite(cfr_values)), dtype=bool)
         routed_efs = np.full(queries.shape[0], int(ef), dtype=np.int64)
-        chr_ratios = chr_values / max(tau, 1e-6)
+        cfr_ratios = cfr_values / max(tau, 1e-6)
 
         if route_efs and bucket_gammas:
-            for i, chr_ratio in enumerate(chr_ratios):
-                if not bool(usable[i]) or not np.isfinite(chr_ratio):
+            for i, cfr_ratio in enumerate(cfr_ratios):
+                if not bool(usable[i]) or not np.isfinite(cfr_ratio):
                     continue
-                routed_efs[i] = route_ef_for_chr_ratio(
+                routed_efs[i] = route_ef_for_cfr_ratio(
                     selection_ef=int(ef),
                     k=int(k),
                     route_efs=route_efs,
                     bucket_gamma_ratios=bucket_gammas,
-                    chr_ratio=float(chr_ratio),
+                    cfr_ratio=float(cfr_ratio),
                 )
 
         ours_counts = np.empty_like(vanilla_counts)
@@ -294,9 +294,9 @@ def measure_backend(
                     'saved_ndis': int(saved[i]),
                     'saved_ndis_pct': float(saved_pct[i]),
                     'routed_ef': int(routed_efs[i]),
-                    'usable_chr': bool(usable[i]),
-                    'mean_smoothed_chr': float(chr_values[i]),
-                    'chr_ratio': float(chr_ratios[i]),
+                    'usable_cfr': bool(usable[i]),
+                    'mean_smoothed_cfr': float(cfr_values[i]),
+                    'cfr_ratio': float(cfr_ratios[i]),
                     'early_stop_ratio': tau,
                 }
             )
@@ -321,7 +321,7 @@ def measure_backend(
                 'vanilla_p95_ndis': float(np.percentile(vanilla_counts, 95)),
                 'ours_p95_ndis': float(np.percentile(ours_counts, 95)),
                 'saved_p95_ndis': float(np.percentile(saved, 95)),
-                'usable_chr_query_count': int(np.sum(usable)),
+                'usable_cfr_query_count': int(np.sum(usable)),
                 'routed_ef_count_signature': route_count_signature(routed_efs),
                 'route_signature': policy['route_signature'],
                 'bucket_gamma_signature': policy['bucket_gamma_signature'],

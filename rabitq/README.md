@@ -27,7 +27,7 @@ Compared with the upstream RaBitQ Library, the SAGE-specific changes are concent
 
 - `include/rabitqlib/index/hnsw/hnsw.hpp`
   - Adds adaptive-light HNSW search entry points.
-  - Computes the online CHR/CFR difficulty signal during base-layer traversal.
+  - Computes the online CFR difficulty signal during base-layer traversal.
   - Applies EMA smoothing with `alpha = 0.8` over the early classification window.
   - Supports hide-node traversal for train-probe calibration.
   - Implements paper bucket routing with `paper_bucket_count=4` and calibrated `bucket_gamma_ratios`.
@@ -44,7 +44,7 @@ Compared with the upstream RaBitQ Library, the SAGE-specific changes are concent
 
 RaBitQ performs HNSW search using binary-quantized distance estimates. SAGE adds adaptive `efSearch` routing to the RaBitQ HNSW base-layer search.
 
-During traversal, the C++ search loop computes a CHR/CFR-style difficulty signal from the current popped candidate distance and the frontier distance. The signal is smoothed with EMA decay `alpha = 0.8`, and the early-window mean is exposed as `classify_chr_mean`.
+During traversal, the C++ search loop computes a CFR-style difficulty signal from the current popped candidate distance and the frontier distance. The signal is smoothed with EMA decay `alpha = 0.8`, and the early-window mean is exposed as `classify_cfr_mean`.
 
 The calibration script builds an offline policy as follows:
 

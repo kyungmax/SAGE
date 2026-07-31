@@ -93,14 +93,10 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def timestamp_for_path() -> str:
-    return time.strftime("%Y%m%d_%H%M%S")
-
-
 def resolve_output_root(path_value: str) -> Path:
     if path_value:
         return Path(path_value).expanduser().resolve()
-    return (THIS_DIR / "results" / f"darth_selected_ef_suite_{timestamp_for_path()}").resolve()
+    return (THIS_DIR / "results" / "darth_selected_ef_suite").resolve()
 
 
 def load_selection_rows(

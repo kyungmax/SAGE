@@ -13,10 +13,10 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_GT_HIT_DIR = (
     ROOT
-    / "final_analysis/false_easy_analysis/first_pass_gt_spread_local_minima_20260622/gt_hit_burst_20260622"
+    / "final_analysis/false_easy_analysis/first_pass_gt_spread_local_minima/gt_hit_burst"
 )
 DEFAULT_INPUT = DEFAULT_GT_HIT_DIR / "per_query_gt_hit_burst_metrics.csv"
-DEFAULT_OUTPUT_DIR = DEFAULT_GT_HIT_DIR / "tail_recovery_budget_20260623"
+DEFAULT_OUTPUT_DIR = DEFAULT_GT_HIT_DIR / "tail_recovery_budget"
 STANDARD_ROUTES = (256, 512, 768, 1024)
 EXTRA_BUDGETS = (16, 32, 64, 128, 256, 384, 512, 768)
 
@@ -129,8 +129,8 @@ def per_query_recovery(rows: pd.DataFrame, k: int) -> pd.DataFrame:
             "route": route,
             "drop": drop,
             "hit_drop_at_k": hit_drop,
-            "classify_chr_mean": float(row["classify_chr_mean"]),
-            "classify_chr_ratio": float(row["classify_chr_ratio"]),
+            "classify_cfr_mean": float(row["classify_cfr_mean"]),
+            "classify_cfr_ratio": float(row["classify_cfr_ratio"]),
             "feature_first_final_step": float(row["feature_first_final_step"]),
             "gt_hit_unique_count": int(row["gt_hit_unique_count"]),
             "hits_before_or_at_route": len(before_or_at_route),

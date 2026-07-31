@@ -41,7 +41,7 @@ DEFAULT_M32_INDEX_ROOT = Path(
         os.environ.get("FAISS_INDEX_ROOT", str(DEFAULT_INDEX_DIR / "faiss_m32_efc500_main8_20260707/darth/index")),
     )
 ).expanduser()
-DEFAULT_INDEX_ROOT_BASE = DEFAULT_INDEX_DIR / "faiss_graph_quality_ndis_20260730/darth/index"
+DEFAULT_INDEX_ROOT_BASE = DEFAULT_INDEX_DIR / "faiss_graph_quality_ndis/darth/index"
 DEFAULT_POLICY_CSV = ROOT / "policy_source" / "combined_faiss_main_qps_latency_sweep.csv"
 DEFAULT_OUT_DIR = ROOT / "faiss_simd_ndis_ef1024"
 DEFAULT_EFS = (1024,)
@@ -284,15 +284,15 @@ def load_policy(args: argparse.Namespace, dataset: str, m: int, efc: int, ef: in
     }
 
 
-def call_chr_summary(index: Any, queries: np.ndarray, args: argparse.Namespace, ef: int) -> dict[str, np.ndarray]:
-    return index.search_layer0_chr_summary(
+def call_cfr_summary(index: Any, queries: np.ndarray, args: argparse.Namespace, ef: int) -> dict[str, np.ndarray]:
+    return index.search_layer0_cfr_summary(
         queries,
         k=10,
         ef=int(ef),
         num_threads=int(args.num_threads),
         classify_start=int(args.classify_start),
         classify_end=int(args.classify_end),
-        chr_ema_decay=float(args.chr_ema_decay),
+        cfr_ema_decay=float(args.cfr_ema_decay),
     )
 
 
@@ -309,7 +309,7 @@ def adaptive_analysis(index: Any, queries: np.ndarray, args: argparse.Namespace,
         "bucket_gamma_ratios": list(policy["bucket_gamma_ratios"]),
         "classify_start": int(args.classify_start),
         "classify_end": int(args.classify_end),
-        "chr_ema_decay": float(args.chr_ema_decay),
+        "cfr_ema_decay": float(args.cfr_ema_decay),
     }
     return index.knn_query_adaptive_analysis_paper_bucket(queries, **kwargs)
 
@@ -327,7 +327,7 @@ def adaptive_query(index: Any, queries: np.ndarray, args: argparse.Namespace, ef
         bucket_gamma_ratios=list(policy["bucket_gamma_ratios"]),
         classify_start=int(args.classify_start),
         classify_end=int(args.classify_end),
-        chr_ema_decay=float(args.chr_ema_decay),
+        cfr_ema_decay=float(args.cfr_ema_decay),
     )
     return np.asarray(labels, dtype=np.int64)
 
@@ -376,7 +376,7 @@ def measure_one(args: argparse.Namespace, spec: DatasetSpec, m: int, efc: int, e
 
     print(f"[NDIS] {spec.stem} M={m} efC={efc} ef={ef} q={len(queries)} index={index_path}", flush=True)
     t0 = time.perf_counter()
-    vanilla_trace = call_chr_summary(index, queries, args, int(ef))
+    vanilla_trace = call_cfr_summary(index, queries, args, int(ef))
     vanilla_wall = time.perf_counter() - t0
     vanilla_ndis = np.asarray(vanilla_trace["distance_counts"], dtype=np.float64)
     vanilla_pop = np.asarray(vanilla_trace.get("step_counts", np.full(vanilla_ndis.shape, int(ef))), dtype=np.float64)
@@ -566,7 +566,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--reuse-existing", action="store_true")
     parser.add_argument("--classify-start", type=int, default=4)
     parser.add_argument("--classify-end", type=int, default=16)
-    parser.add_argument("--chr-ema-decay", type=float, default=0.8)
+    parser.add_argument("--cfr-ema-decay", type=float, default=0.8)
     parser.add_argument("--tmin-pops", type=int, default=25)
     args = parser.parse_args(argv)
 

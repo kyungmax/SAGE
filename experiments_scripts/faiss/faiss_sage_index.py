@@ -42,8 +42,8 @@ def _faiss_num_threads(num_threads: int | None) -> Iterator[None]:
 
 
 
-CHR_EMA_DECAY = 0.8
-CHR_EMA_UPDATE = 1.0 - CHR_EMA_DECAY
+CFR_EMA_DECAY = 0.8
+CFR_EMA_UPDATE = 1.0 - CFR_EMA_DECAY
 
 
 
@@ -236,7 +236,7 @@ class Index:
         mid_easy_upper_gamma_ratio: float = float("nan"),
         classify_start: int = 4,
         classify_end: int = 16,
-        chr_ema_decay: float = CHR_EMA_DECAY,
+        cfr_ema_decay: float = CFR_EMA_DECAY,
     ):
         vectors = self._prepare_vectors(data)
         return self._require_index().knn_query_adaptive_light(
@@ -251,12 +251,47 @@ class Index:
             mid_easy_upper_gamma_ratio=float(mid_easy_upper_gamma_ratio),
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
             filter=filter,
         )
 
-    def _paper_bucket_query_method(self):
+    def knn_query_adaptive_light_pre_frontier(
+        self,
+        data,
+        k: int = 1,
+        ef_init: int = 128,
+        enable_stop: bool = True,
+        num_threads: int = -1,
+        filter=None,
+        early_stop_ratio: float = 0.6,
+        tmin_pops: int = 25,
+        super_easy_gamma_ratio: float = float("nan"),
+        mid_easy_upper_gamma_ratio: float = float("nan"),
+        classify_start: int = 4,
+        classify_end: int = 16,
+        cfr_ema_decay: float = CFR_EMA_DECAY,
+    ):
+        vectors = self._prepare_vectors(data)
+        return self._require_index().knn_query_adaptive_light_pre_frontier(
+            vectors,
+            k=int(k),
+            ef_init=int(ef_init),
+            enable_stop=bool(enable_stop),
+            num_threads=self._num_threads if num_threads <= 0 else int(num_threads),
+            early_stop_ratio=float(early_stop_ratio),
+            tmin_pops=int(tmin_pops),
+            super_easy_gamma_ratio=float(super_easy_gamma_ratio),
+            mid_easy_upper_gamma_ratio=float(mid_easy_upper_gamma_ratio),
+            classify_start=int(classify_start),
+            classify_end=int(classify_end),
+            cfr_ema_decay=float(cfr_ema_decay),
+            filter=filter,
+        )
+
+    def _paper_bucket_query_method(self, *, pre_frontier: bool = False):
         index = self._require_index()
+        if pre_frontier:
+            return index.knn_query_adaptive_light_paper_bucket_pre_frontier
         method = getattr(index, "knn_query_sage", None)
         if method is not None:
             return method
@@ -276,7 +311,7 @@ class Index:
         bucket_gamma_ratios=(),
         classify_start: int = 4,
         classify_end: int = 16,
-        chr_ema_decay: float = CHR_EMA_DECAY,
+        cfr_ema_decay: float = CFR_EMA_DECAY,
     ):
         vectors = self._prepare_vectors(data)
         return self._paper_bucket_query_method()(
@@ -292,7 +327,40 @@ class Index:
             bucket_gamma_ratios=list(bucket_gamma_ratios),
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
+        )
+
+    def knn_query_adaptive_light_paper_bucket_pre_frontier(
+        self,
+        data,
+        k: int = 1,
+        ef_init: int = 128,
+        enable_stop: bool = True,
+        num_threads: int = -1,
+        filter=None,
+        early_stop_ratio: float = 0.6,
+        tmin_pops: int = 25,
+        paper_bucket_count: int = 4,
+        bucket_gamma_ratios=(),
+        classify_start: int = 4,
+        classify_end: int = 16,
+        cfr_ema_decay: float = CFR_EMA_DECAY,
+    ):
+        vectors = self._prepare_vectors(data)
+        return self._paper_bucket_query_method(pre_frontier=True)(
+            vectors,
+            k=int(k),
+            ef_init=int(ef_init),
+            enable_stop=bool(enable_stop),
+            num_threads=self._num_threads if num_threads <= 0 else int(num_threads),
+            filter=filter,
+            early_stop_ratio=float(early_stop_ratio),
+            tmin_pops=int(tmin_pops),
+            paper_bucket_count=int(paper_bucket_count),
+            bucket_gamma_ratios=list(bucket_gamma_ratios),
+            classify_start=int(classify_start),
+            classify_end=int(classify_end),
+            cfr_ema_decay=float(cfr_ema_decay),
         )
 
     def knn_query_adaptive_analysis_paper_bucket(
@@ -310,7 +378,7 @@ class Index:
         bucket_gamma_ratios=(),
         classify_start: int = 4,
         classify_end: int = 16,
-        chr_ema_decay: float = CHR_EMA_DECAY,
+        cfr_ema_decay: float = CFR_EMA_DECAY,
     ):
         native_method = getattr(
             self._require_index(),
@@ -339,7 +407,7 @@ class Index:
             bucket_gamma_ratios=list(bucket_gamma_ratios),
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
         )
 
     def knn_query_sage(self, *args, **kwargs):
@@ -546,9 +614,9 @@ class Index:
                         "unvisited_neighbor_count": int(trace["unvisited_counts"][row, step]),
                         "accepted_neighbor_count": int(trace["accepted_counts"][row, step]),
                         "runtime_accepted_rate": float(trace["runtime_accepted_rates"][row, step]),
-                        "runtime_chr": float(trace["runtime_cfrs"][row, step]),
-                        "runtime_smoothed_chr": float(trace["runtime_smoothed_cfrs"][row, step]),
-                        "runtime_classify_chr_mean": float("nan"),
+                        "runtime_cfr": float(trace["runtime_cfrs"][row, step]),
+                        "runtime_smoothed_cfr": float(trace["runtime_smoothed_cfrs"][row, step]),
+                        "runtime_classify_cfr_mean": float("nan"),
                         "runtime_classification_evaluated": False,
                         "runtime_is_easy_query": False,
                         "runtime_is_super_easy_query": False,
@@ -596,7 +664,7 @@ class Index:
         trace["ef"] = int(ef)
         return self._native_trace_to_paths(trace)
 
-    def _native_chr_summary(
+    def _native_cfr_summary(
         self,
         data,
         *,
@@ -606,13 +674,19 @@ class Index:
         num_threads: int = -1,
         classify_start: int = 4,
         classify_end: int = 16,
-        chr_ema_decay: float = CHR_EMA_DECAY,
+        cfr_ema_decay: float = CFR_EMA_DECAY,
+        pre_frontier: bool = False,
     ) -> dict[str, np.ndarray]:
-        native_method = getattr(self._require_index(), "search_layer0_chr_summary", None)
+        native_name = (
+            "search_layer0_cfr_summary_pre_frontier"
+            if pre_frontier
+            else "search_layer0_cfr_summary"
+        )
+        native_method = getattr(self._require_index(), native_name, None)
         if native_method is None:
             raise RuntimeError(
-                "Current Faiss build does not expose native search_layer0_chr_summary(). "
-                "Rebuild/install Faiss with SAGE CHR summary instrumentation."
+                f"Current Faiss build does not expose native {native_name}(). "
+                "Rebuild/install Faiss with SAGE CFR summary instrumentation."
             )
         vectors = self._prepare_vectors(data)
         return native_method(
@@ -623,10 +697,10 @@ class Index:
             num_threads=self._num_threads if num_threads <= 0 else int(num_threads),
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
         )
 
-    def search_layer0_chr_summary(
+    def search_layer0_cfr_summary(
         self,
         data,
         *,
@@ -636,9 +710,9 @@ class Index:
         num_threads: int = -1,
         classify_start: int = 4,
         classify_end: int = 16,
-        chr_ema_decay: float = CHR_EMA_DECAY,
+        cfr_ema_decay: float = CFR_EMA_DECAY,
     ) -> dict[str, np.ndarray]:
-        return self._native_chr_summary(
+        return self._native_cfr_summary(
             data,
             k=int(k),
             ef=int(ef),
@@ -646,10 +720,34 @@ class Index:
             num_threads=int(num_threads),
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
         )
 
-    def search_layer0_chr_summary_hide_node_batch(
+    def search_layer0_cfr_summary_pre_frontier(
+        self,
+        data,
+        *,
+        k: int,
+        ef: int,
+        hide_labels=None,
+        num_threads: int = -1,
+        classify_start: int = 4,
+        classify_end: int = 16,
+        cfr_ema_decay: float = CFR_EMA_DECAY,
+    ) -> dict[str, np.ndarray]:
+        return self._native_cfr_summary(
+            data,
+            k=int(k),
+            ef=int(ef),
+            hide_labels=hide_labels,
+            num_threads=int(num_threads),
+            classify_start=int(classify_start),
+            classify_end=int(classify_end),
+            cfr_ema_decay=float(cfr_ema_decay),
+            pre_frontier=True,
+        )
+
+    def search_layer0_cfr_summary_hide_node_batch(
         self,
         data,
         *args,
@@ -659,12 +757,12 @@ class Index:
         num_threads: int = -1,
         classify_start: int = 4,
         classify_end: int = 16,
-        chr_ema_decay: float = CHR_EMA_DECAY,
+        cfr_ema_decay: float = CFR_EMA_DECAY,
     ) -> dict[str, np.ndarray]:
         if args:
             if len(args) > 1:
                 raise TypeError(
-                    "search_layer0_chr_summary_hide_node_batch accepts at most one "
+                    "search_layer0_cfr_summary_hide_node_batch accepts at most one "
                     "positional argument after data."
                 )
             if ef is not None:
@@ -674,7 +772,7 @@ class Index:
             raise TypeError("Missing required argument: ef")
         if hide_labels is None:
             raise TypeError("Missing required argument: hide_labels")
-        return self._native_chr_summary(
+        return self._native_cfr_summary(
             data,
             k=10 if k is None else int(k),
             ef=int(ef),
@@ -682,10 +780,10 @@ class Index:
             num_threads=int(num_threads),
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
         )
 
-    def search_layer0_chr_summary_batch(
+    def search_layer0_cfr_summary_batch(
         self,
         data,
         *args,
@@ -694,12 +792,12 @@ class Index:
         num_threads: int = -1,
         classify_start: int = 4,
         classify_end: int = 16,
-        chr_ema_decay: float = CHR_EMA_DECAY,
+        cfr_ema_decay: float = CFR_EMA_DECAY,
     ) -> dict[str, np.ndarray]:
         if args:
             if len(args) > 1:
                 raise TypeError(
-                    "search_layer0_chr_summary_batch accepts at most one "
+                    "search_layer0_cfr_summary_batch accepts at most one "
                     "positional argument after data."
                 )
             if ef is not None:
@@ -707,7 +805,7 @@ class Index:
             ef = int(args[0])
         if ef is None:
             raise TypeError("Missing required argument: ef")
-        return self._native_chr_summary(
+        return self._native_cfr_summary(
             data,
             k=10 if k is None else int(k),
             ef=int(ef),
@@ -715,7 +813,7 @@ class Index:
             num_threads=int(num_threads),
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
         )
 
     def search_layer0_path_batch(self, data, ef: int, num_threads: int = -1):

@@ -225,22 +225,22 @@ struct SageLevel0SearchResult {
     float closest_dist = std::numeric_limits<float>::infinity();
 };
 
-struct SageChrWindowConfig {
+struct SageCfrWindowConfig {
     int classify_start = 4;
     int classify_end = 16;
-    float chr_ema_decay = 0.8f;
+    float cfr_ema_decay = 0.8f;
 };
 
-static SageChrWindowConfig sage_resolve_chr_window_config(
+static SageCfrWindowConfig sage_resolve_cfr_window_config(
         const SearchParameters* params) {
-    SageChrWindowConfig config;
+    SageCfrWindowConfig config;
     if (params) {
         const auto adaptive_params =
                 dynamic_cast<const SearchParametersHNSWAdaptiveLight*>(params);
         if (adaptive_params) {
             config.classify_start = adaptive_params->classify_start;
             config.classify_end = adaptive_params->classify_end;
-            config.chr_ema_decay = adaptive_params->chr_ema_decay;
+            config.cfr_ema_decay = adaptive_params->cfr_ema_decay;
         }
     }
     FAISS_THROW_IF_NOT_FMT(
@@ -254,10 +254,10 @@ static SageChrWindowConfig sage_resolve_chr_window_config(
             config.classify_start,
             config.classify_end);
     FAISS_THROW_IF_NOT_MSG(
-            std::isfinite(config.chr_ema_decay) &&
-                    config.chr_ema_decay >= 0.0f &&
-                    config.chr_ema_decay <= 1.0f,
-            "chr_ema_decay must be finite and lie in [0, 1]");
+            std::isfinite(config.cfr_ema_decay) &&
+                    config.cfr_ema_decay >= 0.0f &&
+                    config.cfr_ema_decay <= 1.0f,
+            "cfr_ema_decay must be finite and lie in [0, 1]");
     return config;
 }
 
@@ -279,9 +279,9 @@ static SageLevel0SearchResult sage_search_level0_hidden(
     SageLevel0SearchResult result;
     const HNSW& hnsw = index.hnsw;
     const IDSelector* sel = params ? params->sel : nullptr;
-    const SageChrWindowConfig chr_config =
-            sage_resolve_chr_window_config(params);
-    const float chr_ema_update = 1.0f - chr_config.chr_ema_decay;
+    const SageCfrWindowConfig cfr_config =
+            sage_resolve_cfr_window_config(params);
+    const float cfr_ema_update = 1.0f - cfr_config.cfr_ema_decay;
     const size_t normalized_k = std::max<size_t>(static_cast<size_t>(k), 1);
     const size_t ef_search = std::max<size_t>(static_cast<size_t>(ef), normalized_k);
     const float nan = std::numeric_limits<float>::quiet_NaN();
@@ -388,15 +388,15 @@ static SageLevel0SearchResult sage_search_level0_hidden(
                     smoothed_cfr_ema = runtime_cfr;
                 } else {
                     smoothed_cfr_ema =
-                            chr_config.chr_ema_decay * smoothed_cfr_ema +
-                            chr_ema_update * runtime_cfr;
+                            cfr_config.cfr_ema_decay * smoothed_cfr_ema +
+                            cfr_ema_update * runtime_cfr;
                 }
                 runtime_smoothed_cfr = smoothed_cfr_ema;
             }
             if (full_pop_count >=
-                        static_cast<size_t>(chr_config.classify_start) &&
+                        static_cast<size_t>(cfr_config.classify_start) &&
                 full_pop_count <=
-                        static_cast<size_t>(chr_config.classify_end) &&
+                        static_cast<size_t>(cfr_config.classify_end) &&
                 std::isfinite(runtime_smoothed_cfr)) {
                 classify_window_sum += static_cast<double>(runtime_smoothed_cfr);
                 classify_window_count++;
@@ -1497,7 +1497,7 @@ void IndexHNSW::search_layer0_trace(
     hnsw_stats.combine({n1, n2, ndis, nhops});
 }
 
-void IndexHNSW::search_layer0_chr_summary(
+void IndexHNSW::search_layer0_cfr_summary(
         idx_t n,
         const float* x,
         idx_t k,

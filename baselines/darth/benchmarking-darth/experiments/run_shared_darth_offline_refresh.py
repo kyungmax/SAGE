@@ -91,11 +91,10 @@ def resolve_predictor_python(path_value: str) -> str:
 def resolve_results_root(path_value: str, *, m: int, efc: int, k: int) -> Path:
     if path_value:
         return Path(path_value).expanduser().resolve()
-    stamp = time.strftime("%Y%m%d_%H%M%S")
     return (
         Path(__file__).resolve().parent
         / "results"
-        / f"darth_offline_refresh_M{m}_efC{efc}_k{k}_{stamp}"
+        / f"darth_offline_refresh_M{m}_efC{efc}_k{k}"
     )
 
 

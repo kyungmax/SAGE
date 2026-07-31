@@ -76,7 +76,7 @@ def add_route_boundary_fields(df: pd.DataFrame) -> pd.DataFrame:
         gammas = parse_numeric_list(getattr(row, "bucket_gammas"), float)
         routed = int(getattr(row, "routed_ef"))
         ef = int(getattr(row, "ef"))
-        ratio = float(getattr(row, "chr")) / max(float(getattr(row, "tau")), 1e-12)
+        ratio = float(getattr(row, "cfr")) / max(float(getattr(row, "tau")), 1e-12)
         route_idx = routes.index(routed) if routed in routes else -1
         boundary = float("nan")
         margin = float("nan")
@@ -89,7 +89,7 @@ def add_route_boundary_fields(df: pd.DataFrame) -> pd.DataFrame:
         rows.append(
             {
                 "route_bucket": f"{ef}->{routed}",
-                "chr_ratio": ratio,
+                "cfr_ratio": ratio,
                 "route_index": route_idx,
                 "next_harder_route": next_route,
                 "harder_route_boundary_gamma": boundary,
@@ -159,7 +159,7 @@ def summarize_routes(large: pd.DataFrame) -> pd.DataFrame:
                 "exact_ours_recall_mean": float(part["exact_ours_recall"].mean()),
                 "route_only_loss_mean": float(part["route_only_loss"].mean()),
                 "stop_extra_loss_mean": float(part["stop_extra_loss"].mean()),
-                "chr_ratio_mean": float(part["chr_ratio"].mean()),
+                "cfr_ratio_mean": float(part["cfr_ratio"].mean()),
                 "margin_to_harder_route_p50": finite_quantile(part["margin_to_harder_route"], 0.50),
                 "near_boundary_0p01_pct": pct(part["near_boundary_0p01"]),
                 "near_boundary_0p05_pct": pct(part["near_boundary_0p05"]),
@@ -211,7 +211,7 @@ def feature_summary(fe: pd.DataFrame, min_drop: float) -> pd.DataFrame:
         "exact_ours_recall",
         "route_only_loss",
         "stop_extra_loss",
-        "chr_ratio",
+        "cfr_ratio",
         "margin_to_harder_route",
         "group_def_vanilla_recall",
         "group_def_first_final_recall_step",
@@ -293,9 +293,9 @@ def write_markdown(
         "",
         "Reading:",
         "",
-        "- `route_only_loss` compares vanilla at the selected efSearch against vanilla at the CHR-selected lower route.",
+        "- `route_only_loss` compares vanilla at the selected efSearch against vanilla at the CFR-selected lower route.",
         "- `stop_extra_loss` is any additional loss of exact Ours versus the full lower-route search; if this is near zero, the problem is route assignment, not an extra early-stop artifact.",
-        "- `margin_to_harder_route` is the CHR-ratio distance to the next harder route boundary. Small values mean boundary cases; large values mean the query looked confidently easy under CHR.",
+        "- `margin_to_harder_route` is the CFR-ratio distance to the next harder route boundary. Small values mean boundary cases; large values mean the query looked confidently easy under CFR.",
         "",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
@@ -351,7 +351,7 @@ def main() -> int:
         "exact_ours_recall",
         "route_only_loss",
         "stop_extra_loss",
-        "chr_ratio",
+        "cfr_ratio",
         "margin_to_harder_route",
         "group_def_vanilla_recall",
         "group_def_first_final_recall_step",

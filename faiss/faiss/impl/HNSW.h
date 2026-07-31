@@ -67,7 +67,7 @@ struct SearchParametersHNSWAdaptiveLight : SearchParametersHNSW {
     float mid_easy_upper_gamma_ratio = std::numeric_limits<float>::quiet_NaN();
     int classify_start = 4;
     int classify_end = 16;
-    float chr_ema_decay = 0.8f;
+    float cfr_ema_decay = 0.8f;
     bool paper_bucket_mode = false;
     int paper_bucket_count = 4;
     float bucket_gamma_ratio_0 = std::numeric_limits<float>::quiet_NaN();

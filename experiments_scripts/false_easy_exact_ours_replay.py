@@ -17,12 +17,12 @@ import false_easy_first_pass_gt_spread_local_minima as first_pass
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT = (
     ROOT
-    / "final_analysis/false_easy_analysis/final5_querywise_tail_replay_20260623"
+    / "final_analysis/false_easy_analysis/final5_querywise_tail_replay"
     / "paper_difficulty_full_ladder/per_query_route_replay_with_paper_difficulty.csv"
 )
 DEFAULT_OUTPUT_DIR = (
     ROOT
-    / "final_analysis/false_easy_analysis/final5_querywise_tail_replay_20260623"
+    / "final_analysis/false_easy_analysis/final5_querywise_tail_replay"
     / "paper_difficulty_full_ladder/exact_ours_replay"
 )
 OLD_TRUE_GT = ROOT / "final_analysis/false_easy_analysis/hard_group_drilldown_true_gt.csv"

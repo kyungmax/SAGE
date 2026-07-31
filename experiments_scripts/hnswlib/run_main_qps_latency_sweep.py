@@ -58,7 +58,7 @@ from common.offline_calibration import (  # noqa: E402
 from common.projected_local_acceptable_runtime import (  # noqa: E402
     _compute_gt_neighbors,
     _compute_recall_by_ef,
-    _extract_chr_mean_by_query,
+    _extract_cfr_mean_by_query,
     _select_dummy_queries,
 )
 from final_index_utils import build_original_index  # noqa: E402
@@ -389,18 +389,18 @@ def route_count_signature(routed_efs: np.ndarray) -> str:
     return ";".join(f"{int(value)}:{int(count)}" for value, count in zip(values, counts))
 
 
-def route_ef_for_chr_ratio(
+def route_ef_for_cfr_ratio(
     *,
     selection_ef: int,
     k: int,
     route_efs: tuple[int, ...],
     bucket_gamma_ratios: tuple[float, ...],
-    chr_ratio: float,
+    cfr_ratio: float,
 ) -> int:
-    if not np.isfinite(chr_ratio):
+    if not np.isfinite(cfr_ratio):
         return int(selection_ef)
     for route_ef, gamma in zip(route_efs, bucket_gamma_ratios):
-        if float(chr_ratio) <= float(gamma) + 1e-12:
+        if float(cfr_ratio) <= float(gamma) + 1e-12:
             return max(int(k), int(route_ef))
     return int(selection_ef)
 
@@ -482,7 +482,7 @@ def compute_offline_recommended_efsearch(
         cfr_p95 = float("nan")
         tau = float(tau_by_ef[int(ef)])
 
-        anchor_df = _extract_chr_mean_by_query(
+        anchor_df = _extract_cfr_mean_by_query(
             index=index,
             selected_df=selected_df,
             query_vectors=query_vectors,
@@ -492,11 +492,11 @@ def compute_offline_recommended_efsearch(
             k=int(k),
         )
         usable_mask = anchor_df["usable_for_mean_window_calibration"].astype(bool).to_numpy(dtype=bool)
-        chr_values = pd.to_numeric(
-            anchor_df["mean_smoothed_chr_classify_window"],
+        cfr_values = pd.to_numeric(
+            anchor_df["mean_smoothed_cfr_classify_window"],
             errors="coerce",
         ).to_numpy(dtype=np.float64)
-        finite_cfr_values = chr_values[usable_mask & np.isfinite(chr_values)]
+        finite_cfr_values = cfr_values[usable_mask & np.isfinite(cfr_values)]
         usable_count = int(finite_cfr_values.size)
         if finite_cfr_values.size:
             cfr_mean = float(np.mean(finite_cfr_values))
@@ -507,16 +507,16 @@ def compute_offline_recommended_efsearch(
             cfr_p95 = float(np.quantile(finite_cfr_values, 0.95))
 
         if route_efs and bucket_gammas and len(route_efs) == len(bucket_gammas):
-            for idx, chr_value in enumerate(chr_values):
-                if not usable_mask[idx] or not np.isfinite(chr_value):
+            for idx, cfr_value in enumerate(cfr_values):
+                if not usable_mask[idx] or not np.isfinite(cfr_value):
                     continue
-                chr_ratio = float(chr_value) / max(float(tau), 1e-6)
-                routed_ef = route_ef_for_chr_ratio(
+                cfr_ratio = float(cfr_value) / max(float(tau), 1e-6)
+                routed_ef = route_ef_for_cfr_ratio(
                     selection_ef=int(ef),
                     k=int(k),
                     route_efs=route_efs,
                     bucket_gamma_ratios=bucket_gammas,
-                    chr_ratio=chr_ratio,
+                    cfr_ratio=cfr_ratio,
                 )
                 routed_efs[idx] = int(routed_ef)
                 if int(routed_ef) != int(ef):
@@ -533,8 +533,8 @@ def compute_offline_recommended_efsearch(
                 "offline_vanilla_recall": float(np.mean(full_recalls)),
                 "calibration_query_count": int(len(selected_df)),
                 "calibration_lid_pool_count": int(len(calibration_lid_df)),
-                "usable_chr_query_count": int(usable_count),
-                "cfr_metric": "mean_smoothed_chr_classify_window",
+                "usable_cfr_query_count": int(usable_count),
+                "cfr_metric": "mean_smoothed_cfr_classify_window",
                 "cfr_mean": cfr_mean,
                 "cfr_std": cfr_std,
                 "cfr_p10": cfr_p10,

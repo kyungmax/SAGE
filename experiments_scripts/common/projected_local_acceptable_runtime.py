@@ -17,7 +17,7 @@ from .lid_selection import (
 
 CLASSIFY_START = 4
 CLASSIFY_END = 16
-CHR_EMA_DECAY = 0.8
+CFR_EMA_DECAY = 0.8
 PAPER_FLOOR_PAIR_GAP = 2
 DEFAULT_MIXED_ACCEPTABLE_RECALL_THRESHOLD = 1.0
 DEFAULT_MIXED_THRESHOLD_MODE = "paper_floor_half"
@@ -232,7 +232,8 @@ def _build_cache_settings(
     mixed_bucket_count: int = DEFAULT_MIXED_BUCKET_COUNT,
     classify_start: int = CLASSIFY_START,
     classify_end: int = CLASSIFY_END,
-    chr_ema_decay: float = CHR_EMA_DECAY,
+    cfr_ema_decay: float = CFR_EMA_DECAY,
+    use_pre_frontier_cfr: bool = False,
     paper_floor_pair_gap: int = PAPER_FLOOR_PAIR_GAP,
     lid_sampling_mode: str = "full",
     lid_sample_fraction: float | None = None,
@@ -263,7 +264,9 @@ def _build_cache_settings(
     settings["mixed_bucket_count"] = int(mixed_bucket_count)
     settings["classify_start"] = int(classify_start)
     settings["classify_end"] = int(classify_end)
-    settings["chr_ema_decay"] = float(chr_ema_decay)
+    settings["cfr_ema_decay"] = float(cfr_ema_decay)
+    settings["use_pre_frontier_cfr"] = bool(use_pre_frontier_cfr)
+    settings["cfr_observation_mode"] = "pre_frontier" if bool(use_pre_frontier_cfr) else "post_expansion"
     settings["paper_floor_pair_gap"] = int(paper_floor_pair_gap)
     if (
         str(lid_sampling_mode) != "full"
@@ -536,7 +539,7 @@ def _compute_recall_by_ef(
     )
 
 
-def _extract_chr_mean_by_query(
+def _extract_cfr_mean_by_query(
     *,
     index,
     selected_df: pd.DataFrame,
@@ -547,22 +550,28 @@ def _extract_chr_mean_by_query(
     query_ids: np.ndarray | None = None,
     classify_start: int = CLASSIFY_START,
     classify_end: int = CLASSIFY_END,
-    chr_ema_decay: float = CHR_EMA_DECAY,
+    cfr_ema_decay: float = CFR_EMA_DECAY,
+    use_pre_frontier_cfr: bool = False,
 ) -> pd.DataFrame:
     hide_labels = None if query_ids is None else np.asarray(query_ids, dtype=np.int64)
 
-    # Both backends (faiss + hnswlib) expose search_layer0_chr_summary, which
-    # computes the classify-window smoothed-CHR mean entirely in the C++ search
+    # Both backends (faiss + hnswlib) expose search_layer0_cfr_summary, which
+    # computes the classify-window smoothed-CFR mean entirely in the C++ search
     # and returns compact per-query arrays. This replaces the old per-step trace
     # path (search_layer0_path_with_dist_metrics_*), which marshalled every search
-    # step into a Python dict and re-derived the CHR EMA in Python — the calibration
+    # step into a Python dict and re-derived the CFR EMA in Python — the calibration
     # bottleneck. The summary is a faithful port of that aggregation, so calibrated
     # thresholds are unchanged (values identical up to float rounding).
-    summary_fn = getattr(index, "search_layer0_chr_summary", None)
+    summary_fn_name = (
+        "search_layer0_cfr_summary_pre_frontier"
+        if bool(use_pre_frontier_cfr)
+        else "search_layer0_cfr_summary"
+    )
+    summary_fn = getattr(index, summary_fn_name, None)
     if summary_fn is None:
         raise RuntimeError(
-            "Index build does not expose search_layer0_chr_summary; rebuild the "
-            "backend (faiss/hnswlib) with the layer-0 CHR summary API."
+            f"Index build does not expose {summary_fn_name}; rebuild the "
+            "backend with the requested layer-0 CFR summary API."
         )
 
     summary_kwargs = {
@@ -571,7 +580,7 @@ def _extract_chr_mean_by_query(
         "num_threads": int(num_threads),
         "classify_start": int(classify_start),
         "classify_end": int(classify_end),
-        "chr_ema_decay": float(chr_ema_decay),
+        "cfr_ema_decay": float(cfr_ema_decay),
     }
     if hide_labels is not None:
         summary_kwargs["hide_labels"] = hide_labels
@@ -597,7 +606,8 @@ def _extract_chr_mean_by_query(
                 ),
                 "window_obs_count": int(window_obs_counts[local_idx]),
                 "usable_for_mean_window_calibration": usable,
-                "mean_smoothed_chr_classify_window": mean_window,
+                "mean_smoothed_cfr_classify_window": mean_window,
+                "cfr_observation_mode": "pre_frontier" if bool(use_pre_frontier_cfr) else "post_expansion",
             }
         )
     return pd.DataFrame(rows).sort_values("selection_rank").reset_index(drop=True)
@@ -696,8 +706,8 @@ def _build_mixed_threshold_config(
     )
 
 
-def _quantile_theta(chr_values: np.ndarray, mass: float) -> float:
-    return float(np.quantile(chr_values, float(np.clip(mass, 0.0, 1.0))))
+def _quantile_theta(cfr_values: np.ndarray, mass: float) -> float:
+    return float(np.quantile(cfr_values, float(np.clip(mass, 0.0, 1.0))))
 
 
 def _build_source_label(
@@ -760,7 +770,8 @@ def build_dynamic_projected_local_acceptable_mixed_policy(
     mixed_bucket_count: int = DEFAULT_MIXED_BUCKET_COUNT,
     classify_start: int = CLASSIFY_START,
     classify_end: int = CLASSIFY_END,
-    chr_ema_decay: float = CHR_EMA_DECAY,
+    cfr_ema_decay: float = CFR_EMA_DECAY,
+    use_pre_frontier_cfr: bool = False,
     paper_floor_pair_gap: int = PAPER_FLOOR_PAIR_GAP,
     lid_df: pd.DataFrame | None = None,
     lid_source_graph: str = "index",
@@ -827,7 +838,7 @@ def build_dynamic_projected_local_acceptable_mixed_policy(
                 )
 
     for config in configs:
-        anchor_df = _extract_chr_mean_by_query(
+        anchor_df = _extract_cfr_mean_by_query(
             index=index,
             selected_df=selected_df,
             query_vectors=query_vectors,
@@ -837,17 +848,18 @@ def build_dynamic_projected_local_acceptable_mixed_policy(
             k=int(k),
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
+            use_pre_frontier_cfr=bool(use_pre_frontier_cfr),
         )
         usable_mask = anchor_df["usable_for_mean_window_calibration"].astype(bool).to_numpy(dtype=bool)
-        anchor_chr_values = pd.to_numeric(
-            anchor_df.loc[usable_mask, "mean_smoothed_chr_classify_window"],
+        anchor_cfr_values = pd.to_numeric(
+            anchor_df.loc[usable_mask, "mean_smoothed_cfr_classify_window"],
             errors="coerce",
         ).to_numpy(dtype=float)
-        anchor_chr_values = anchor_chr_values[np.isfinite(anchor_chr_values)]
-        if anchor_chr_values.size == 0:
+        anchor_cfr_values = anchor_cfr_values[np.isfinite(anchor_cfr_values)]
+        if anchor_cfr_values.size == 0:
             raise RuntimeError(
-                f"No usable mixed calibration CHR values for selection_ef={int(config.selection_ef)}."
+                f"No usable mixed calibration CFR values for selection_ef={int(config.selection_ef)}."
             )
 
         route_thetas: list[float] = []
@@ -861,7 +873,7 @@ def build_dynamic_projected_local_acceptable_mixed_policy(
                 )
             )
             route_theta = max(
-                _quantile_theta(anchor_chr_values, acceptable_rate)
+                _quantile_theta(anchor_cfr_values, acceptable_rate)
                 * _threshold_scale_for_route_index(
                     route_index=route_index,
                     route_count=len(route_efs),
@@ -942,7 +954,8 @@ def load_or_build_dynamic_projected_local_acceptable_mixed_policy(
     mixed_bucket_count: int = DEFAULT_MIXED_BUCKET_COUNT,
     classify_start: int = CLASSIFY_START,
     classify_end: int = CLASSIFY_END,
-    chr_ema_decay: float = CHR_EMA_DECAY,
+    cfr_ema_decay: float = CFR_EMA_DECAY,
+    use_pre_frontier_cfr: bool = False,
     paper_floor_pair_gap: int = PAPER_FLOOR_PAIR_GAP,
     lid_df: pd.DataFrame | None = None,
     lid_source_graph: str = "index",
@@ -974,7 +987,8 @@ def load_or_build_dynamic_projected_local_acceptable_mixed_policy(
         mixed_bucket_count=mixed_bucket_count,
         classify_start=int(classify_start),
         classify_end=int(classify_end),
-        chr_ema_decay=float(chr_ema_decay),
+        cfr_ema_decay=float(cfr_ema_decay),
+        use_pre_frontier_cfr=bool(use_pre_frontier_cfr),
         paper_floor_pair_gap=int(paper_floor_pair_gap),
         lid_sampling_mode=lid_sampling_mode,
         lid_sample_fraction=lid_sample_fraction,
@@ -1019,7 +1033,8 @@ def load_or_build_dynamic_projected_local_acceptable_mixed_policy(
         mixed_bucket_count=mixed_bucket_count,
         classify_start=int(classify_start),
         classify_end=int(classify_end),
-        chr_ema_decay=float(chr_ema_decay),
+        cfr_ema_decay=float(cfr_ema_decay),
+        use_pre_frontier_cfr=bool(use_pre_frontier_cfr),
         paper_floor_pair_gap=int(paper_floor_pair_gap),
         lid_df=lid_df,
         lid_source_graph=lid_source_graph,

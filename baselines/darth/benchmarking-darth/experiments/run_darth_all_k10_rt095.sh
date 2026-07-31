@@ -28,7 +28,7 @@ export NUMEXPR_NUM_THREADS="${ONLINE_SEARCH_THREADS}"
 export VECLIB_MAXIMUM_THREADS="${ONLINE_SEARCH_THREADS}"
 export BLIS_NUM_THREADS="${ONLINE_SEARCH_THREADS}"
 
-RUN_TAG="${RUN_TAG:-darth_all_k10_rt095_$(date +%Y%m%d_%H%M%S)}"
+RUN_TAG="${RUN_TAG:-darth_all_k10_rt095}"
 OUT_ROOT="${OUT_ROOT:-${DARTH_ROOT}/experiments/results/${RUN_TAG}}"
 LOG_ROOT="${OUT_ROOT}/logs"
 CSV_ROOT="${OUT_ROOT}/per_query"

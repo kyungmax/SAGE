@@ -22,7 +22,7 @@ HARD_DIR="$ROOT/$RUN_ID/hard_loss_querywise_exactgt_24t"
 LARGE_DIR="$ROOT/$RUN_ID/large_false_easy_drop_analysis"
 LOG_DIR="$ROOT/$RUN_ID/logs"
 mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/faiss_SIMD_on_24t_$(date +%Y%m%d_%H%M%S).log"
+LOG_FILE="$LOG_DIR/faiss_SIMD_on_24t.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 export FAISS_OPT_LEVEL="${FAISS_OPT_LEVEL:-AVX512}"
@@ -59,7 +59,7 @@ echo "[STEP] difficulty_exactgt_24t"
   --num-calibration-queries 100 \
   --classify-start 4 \
   --classify-end 16 \
-  --chr-ema-decay 0.8 \
+  --cfr-ema-decay 0.8 \
   --pair-gap 2 \
   --tmin-pops 25 \
   --mixed-threshold-mode paper_floor_half \
@@ -81,13 +81,13 @@ echo "[STEP] hard_loss_querywise_exactgt_24t"
   --num-threads 24 \
   --workers 24 \
   --batch-size 512 \
-  --chr-batch-size 2048 \
+  --cfr-batch-size 2048 \
   --param-m 32 \
   --ef-construction 500 \
   --tmin-pops 25 \
   --classify-start 4 \
   --classify-end 16 \
-  --chr-ema-decay 0.8
+  --cfr-ema-decay 0.8
 
 echo "[STEP] large_false_easy_drop_analysis"
 "$PY" scripts/analyze_large_false_easy_drops.py \

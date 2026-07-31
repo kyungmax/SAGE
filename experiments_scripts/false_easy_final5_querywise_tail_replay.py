@@ -35,8 +35,8 @@ DEFAULT_DATASETS = (
 DEFAULT_SPACEV_QUERY_CAP = 10000
 CLASSIFY_START = 4
 CLASSIFY_END = 16
-CHR_EMA_DECAY = 0.8
-CHR_EMA_UPDATE = 1.0 - CHR_EMA_DECAY
+CFR_EMA_DECAY = 0.8
+CFR_EMA_UPDATE = 1.0 - CFR_EMA_DECAY
 ROUTE_EFS = (256, 512, 768, 1024)
 TAIL_BUDGETS = (16, 32, 64, 128, 256, 384, 512, 768)
 
@@ -186,7 +186,7 @@ def hit_steps_from_path(path: list[dict[str, Any]], gt_labels: np.ndarray) -> tu
     return labels, path_steps, fullpop_steps
 
 
-def classify_chr_from_path(path: list[dict[str, Any]], selection_ef: int) -> tuple[float, int, int]:
+def classify_cfr_from_path(path: list[dict[str, Any]], selection_ef: int) -> tuple[float, int, int]:
     ema = float("nan")
     observed_full_pop = 0
     window_values: list[float] = []
@@ -205,18 +205,18 @@ def classify_chr_from_path(path: list[dict[str, Any]], selection_ef: int) -> tup
         )
         popped = float(raw_popped) if pd.notna(raw_popped) else float("nan")
         furthest = float(raw_furthest) if pd.notna(raw_furthest) else float("nan")
-        chr_value = float("nan")
+        cfr_value = float("nan")
         if np.isfinite(popped) and np.isfinite(furthest) and abs(furthest) > 1e-12:
-            chr_value = float(abs(popped) / abs(furthest))
-        if np.isfinite(chr_value):
+            cfr_value = float(abs(popped) / abs(furthest))
+        if np.isfinite(cfr_value):
             if np.isnan(ema):
-                ema = float(chr_value)
+                ema = float(cfr_value)
             else:
-                ema = float(CHR_EMA_DECAY * ema + CHR_EMA_UPDATE * chr_value)
+                ema = float(CFR_EMA_DECAY * ema + CFR_EMA_UPDATE * cfr_value)
         if CLASSIFY_START <= observed_full_pop <= CLASSIFY_END and np.isfinite(ema):
             window_values.append(float(ema))
         if observed_full_pop >= CLASSIFY_END:
-            # The path is still needed for GT-hit metrics, but CHR classification is done.
+            # The path is still needed for GT-hit metrics, but CFR classification is done.
             break
     mean_window = float(np.mean(window_values)) if window_values else float("nan")
     return mean_window, int(observed_full_pop), int(len(window_values))
@@ -346,8 +346,8 @@ def run_dataset(stem: str, args: argparse.Namespace) -> tuple[pd.DataFrame, pd.D
         for offset, path in enumerate(paths):
             idx = start + offset
             qid = int(qids[idx])
-            chr_mean, observed_full_pop, window_count = classify_chr_from_path(path, int(args.ef))
-            ratio = float(chr_mean) / max(float(tau), 1e-12) if np.isfinite(chr_mean) else float("nan")
+            cfr_mean, observed_full_pop, window_count = classify_cfr_from_path(path, int(args.ef))
+            ratio = float(cfr_mean) / max(float(tau), 1e-12) if np.isfinite(cfr_mean) else float("nan")
             route = route_for_ratio(
                 selection_ef=int(args.ef),
                 k=int(args.k),
@@ -392,12 +392,12 @@ def run_dataset(stem: str, args: argparse.Namespace) -> tuple[pd.DataFrame, pd.D
                 "recall_512": float(recalls[512][idx]),
                 "recall_768": float(recalls[768][idx]),
                 "recall_1024": float(recalls[1024][idx]),
-                "chr": float(chr_mean),
+                "cfr": float(cfr_mean),
                 "tau": float(tau),
                 "ratio": float(ratio),
                 "gammas": "/".join(f"{gamma:.6f}" for gamma in gammas),
-                "classify_chr_mean": float(chr_mean),
-                "classify_chr_ratio": float(ratio),
+                "classify_cfr_mean": float(cfr_mean),
+                "classify_cfr_ratio": float(ratio),
                 "classify_observed_full_pop_count": int(observed_full_pop),
                 "classify_window_obs_count": int(window_count),
                 "feature_first_final_step": first_final_step,
@@ -522,7 +522,7 @@ def main() -> int:
         "cohort",
         "route",
         "drop",
-        "chr",
+        "cfr",
         "tau",
         "ratio",
         "gammas",

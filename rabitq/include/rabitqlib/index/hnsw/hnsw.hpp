@@ -90,11 +90,11 @@ struct AdaptiveLightStats {
     bool mid_easy_query = false;
     bool ef_shrunk = false;
     bool early_stopped = false;
-    float classify_chr_mean = std::numeric_limits<float>::quiet_NaN();
+    float classify_cfr_mean = std::numeric_limits<float>::quiet_NaN();
     std::array<float, kClassifyTraceLen> classify_popped_dist{};
     std::array<float, kClassifyTraceLen> classify_furthest_dist{};
-    std::array<float, kClassifyTraceLen> classify_chr{};
-    std::array<float, kClassifyTraceLen> classify_smoothed_chr{};
+    std::array<float, kClassifyTraceLen> classify_cfr{};
+    std::array<float, kClassifyTraceLen> classify_smoothed_cfr{};
 };
 
 struct AdaptiveLightSearchResult {
@@ -1629,12 +1629,12 @@ inline void validate_adaptive_bucket_config(const AdaptiveLightConfig& config) {
 
 inline size_t resolve_adaptive_bucket_index(
     const AdaptiveLightConfig& config,
-    float classify_chr_ratio
+    float classify_cfr_ratio
 ) {
     const size_t bucket_count = static_cast<size_t>(config.paper_bucket_count);
     size_t selected_bucket_index = bucket_count - 1;
     for (size_t i = 0; i + 1 < bucket_count; ++i) {
-        if (classify_chr_ratio <= adaptive_bucket_gamma_ratio(config, i)) {
+        if (classify_cfr_ratio <= adaptive_bucket_gamma_ratio(config, i)) {
             selected_bucket_index = i;
             break;
         }
@@ -1646,13 +1646,13 @@ inline size_t resolve_adaptive_bucket_ef(
     size_t configured_ef,
     size_t topk,
     const AdaptiveLightConfig& config,
-    float classify_chr_ratio
+    float classify_cfr_ratio
 ) {
     validate_adaptive_bucket_config(config);
 
     const size_t bucket_count = static_cast<size_t>(config.paper_bucket_count);
     const size_t selected_bucket_index =
-        resolve_adaptive_bucket_index(config, classify_chr_ratio);
+        resolve_adaptive_bucket_index(config, classify_cfr_ratio);
 
     if (selected_bucket_index + 1 >= bucket_count) {
         return configured_ef;
@@ -1705,9 +1705,9 @@ void HierarchicalNSW::searchBaseLayerST_AdaptiveRerankOpt(
                 std::numeric_limits<float>::quiet_NaN();
             adaptive_stats->classify_furthest_dist[static_cast<size_t>(trace_i)] =
                 std::numeric_limits<float>::quiet_NaN();
-            adaptive_stats->classify_chr[static_cast<size_t>(trace_i)] =
+            adaptive_stats->classify_cfr[static_cast<size_t>(trace_i)] =
                 std::numeric_limits<float>::quiet_NaN();
-            adaptive_stats->classify_smoothed_chr[static_cast<size_t>(trace_i)] =
+            adaptive_stats->classify_smoothed_cfr[static_cast<size_t>(trace_i)] =
                 std::numeric_limits<float>::quiet_NaN();
         }
     }
@@ -1718,8 +1718,8 @@ void HierarchicalNSW::searchBaseLayerST_AdaptiveRerankOpt(
     static constexpr size_t kHardOnlyStagLimit = 20;
     static constexpr int kClassifyStart = 4;
     static constexpr int kClassifyEnd = 16;
-    static constexpr float kChrEmaDecay = 0.8F;
-    static constexpr float kChrEmaUpdate = 1.0F - kChrEmaDecay;
+    static constexpr float kCfrEmaDecay = 0.8F;
+    static constexpr float kCfrEmaUpdate = 1.0F - kCfrEmaDecay;
 
     bool is_easy_query = false;
     bool is_super_easy_query = false;
@@ -1731,10 +1731,10 @@ void HierarchicalNSW::searchBaseLayerST_AdaptiveRerankOpt(
     int full_pop_count = 0;
     int stagnation_count = 0;
     float prev_furthest = std::numeric_limits<float>::max();
-    float smoothed_chr_ema = std::numeric_limits<float>::quiet_NaN();
-    float classify_smoothed_chr_sum = 0.0F;
-    int classify_smoothed_chr_count = 0;
-    float classify_chr_mean = std::numeric_limits<float>::quiet_NaN();
+    float smoothed_cfr_ema = std::numeric_limits<float>::quiet_NaN();
+    float classify_smoothed_cfr_sum = 0.0F;
+    int classify_smoothed_cfr_count = 0;
+    float classify_cfr_mean = std::numeric_limits<float>::quiet_NaN();
     const bool direct_classifier_threshold_enabled =
         adaptive_enabled && std::isfinite(adaptive_config->early_stop_ratio);
     const bool super_easy_policy_enabled =
@@ -1875,15 +1875,15 @@ void HierarchicalNSW::searchBaseLayerST_AdaptiveRerankOpt(
             const float current_dist_for_ratio = adaptive_light_ratio_distance(
                 current_candidate_dist, metric_type_
             );
-            const float chr =
+            const float cfr =
                 current_dist_for_ratio / std::max(furthest_dist, 1e-6F);
             bool rebased_after_shrink = false;
 
-            if (std::isnan(smoothed_chr_ema)) {
-                smoothed_chr_ema = chr;
+            if (std::isnan(smoothed_cfr_ema)) {
+                smoothed_cfr_ema = cfr;
             } else {
-                smoothed_chr_ema =
-                    kChrEmaDecay * smoothed_chr_ema + kChrEmaUpdate * chr;
+                smoothed_cfr_ema =
+                    kCfrEmaDecay * smoothed_cfr_ema + kCfrEmaUpdate * cfr;
             }
 
             if (full_pop_count >= kClassifyStart && full_pop_count <= kClassifyEnd) {
@@ -1893,30 +1893,30 @@ void HierarchicalNSW::searchBaseLayerST_AdaptiveRerankOpt(
                         current_dist_for_ratio;
                     adaptive_stats->classify_furthest_dist[static_cast<size_t>(trace_idx)] =
                         furthest_dist;
-                    adaptive_stats->classify_chr[static_cast<size_t>(trace_idx)] = chr;
-                    adaptive_stats->classify_smoothed_chr[static_cast<size_t>(trace_idx)] =
-                        smoothed_chr_ema;
+                    adaptive_stats->classify_cfr[static_cast<size_t>(trace_idx)] = cfr;
+                    adaptive_stats->classify_smoothed_cfr[static_cast<size_t>(trace_idx)] =
+                        smoothed_cfr_ema;
                 }
-                classify_smoothed_chr_sum += smoothed_chr_ema;
-                classify_smoothed_chr_count++;
+                classify_smoothed_cfr_sum += smoothed_cfr_ema;
+                classify_smoothed_cfr_count++;
 
                 if (!classification_evaluated && full_pop_count == kClassifyEnd) {
                     classification_evaluated = true;
                     if (direct_classifier_threshold_enabled) {
-                        classify_chr_mean = classify_smoothed_chr_sum /
-                                            static_cast<float>(classify_smoothed_chr_count);
+                        classify_cfr_mean = classify_smoothed_cfr_sum /
+                                            static_cast<float>(classify_smoothed_cfr_count);
                         is_easy_query =
-                            classify_chr_mean <= adaptive_config->early_stop_ratio;
+                            classify_cfr_mean <= adaptive_config->early_stop_ratio;
                         if (is_easy_query) {
-                            const float classify_chr_ratio =
-                                classify_chr_mean /
+                            const float classify_cfr_ratio =
+                                classify_cfr_mean /
                                 std::max(adaptive_config->early_stop_ratio, 1e-6F);
                             if (super_easy_policy_enabled) {
-                                is_super_easy_query = classify_chr_ratio <=
+                                is_super_easy_query = classify_cfr_ratio <=
                                                       adaptive_config->super_easy_gamma_ratio;
                             }
                             if (mid_easy_bucket_policy_enabled) {
-                                is_mid_easy_query = classify_chr_ratio <=
+                                is_mid_easy_query = classify_cfr_ratio <=
                                                     adaptive_config->mid_easy_upper_gamma_ratio;
                             }
                         }
@@ -1926,15 +1926,15 @@ void HierarchicalNSW::searchBaseLayerST_AdaptiveRerankOpt(
                         size_t shrunk_ef = configured_ef;
                         if (adaptive_config->paper_bucket_mode) {
                             if (is_easy_query) {
-                                const float classify_chr_ratio =
-                                    classify_chr_mean /
+                                const float classify_cfr_ratio =
+                                    classify_cfr_mean /
                                     std::max(adaptive_config->early_stop_ratio, 1e-6F);
                                 const size_t selected_bucket_index =
-                                    resolve_adaptive_bucket_index(*adaptive_config, classify_chr_ratio);
+                                    resolve_adaptive_bucket_index(*adaptive_config, classify_cfr_ratio);
                                 is_super_easy_query = selected_bucket_index == 0;
                                 is_mid_easy_query = selected_bucket_index <= 1;
                                 shrunk_ef = resolve_adaptive_bucket_ef(
-                                    configured_ef, TOPK, *adaptive_config, classify_chr_ratio
+                                    configured_ef, TOPK, *adaptive_config, classify_cfr_ratio
                                 );
                             }
                         } else {
@@ -2012,7 +2012,7 @@ void HierarchicalNSW::searchBaseLayerST_AdaptiveRerankOpt(
         adaptive_stats->mid_easy_query = is_mid_easy_query;
         adaptive_stats->ef_shrunk = ef_was_shrunk;
         adaptive_stats->early_stopped = early_stopped;
-        adaptive_stats->classify_chr_mean = classify_chr_mean;
+        adaptive_stats->classify_cfr_mean = classify_cfr_mean;
         adaptive_stats->base_layer_time_ns = ns_between(base_start_time, Clock::now());
     }
 

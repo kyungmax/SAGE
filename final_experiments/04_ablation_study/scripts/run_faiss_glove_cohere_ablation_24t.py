@@ -189,7 +189,7 @@ def common_sweep_args(args: argparse.Namespace, datasets: Sequence[str], cell_ro
         "--mixed-bucket-count", str(int(cell.bucket_count)),
         "--classify-start", str(int(cell.classify_start)),
         "--classify-end", str(int(cell.classify_end)),
-        "--chr-ema-decay", f"{float(cell.alpha):g}",
+        "--cfr-ema-decay", f"{float(cell.alpha):g}",
         "--pair-gap", str(int(cell.pair_gap)),
         "--tmin-pops", str(int(args.tmin_pops)),
         "--ablation-name", cell.ablation_name,

@@ -31,7 +31,15 @@ Environment variables:
 - `FAISS_PYTHON_PATH`: patched FAISS Python package. Defaults to `<repo>/faiss/build_sage_avx512/faiss/python`.
 - `SAGE_PYTHON`: Python executable for child cells. Defaults to the current Python executable.
 
-Run 24-thread cells:
+Run 24-thread cells from the repository root:
+
+```bash
+./setup.sh
+source ./sage_env.sh
+./run_main8.sh
+```
+
+The underlying runner remains available when working inside this directory:
 
 ```bash
 cd $SAGE_PROJECT_ROOT/final_experiments/01_main_results
@@ -45,11 +53,16 @@ cd $SAGE_PROJECT_ROOT/final_experiments/01_main_results
 python3 run_main8_online1.py run-all
 ```
 
-Run one backend cell:
+Run one backend cell from the repository root:
 
 ```bash
-python3 run_main8_online24_20260707.py run-cell --cell hnswlib
-python3 run_main8_online24_20260707.py run-cell --cell faiss
+./run_main8.sh run-cell --cell hnswlib
+./run_main8.sh run-cell --cell faiss
+```
+
+Single-thread cells still use the local runner directly:
+
+```bash
 python3 run_main8_online1.py run-cell --cell hnswlib
 python3 run_main8_online1.py run-cell --cell faiss
 ```

@@ -499,7 +499,7 @@ def handle_Index(the_class):
             mid_easy_upper_gamma_ratio=np.nan,
             classify_start=4,
             classify_end=16,
-            chr_ema_decay=0.8):
+            cfr_ema_decay=0.8):
         """Python wrapper for the Faiss adaptive-light query API."""
 
         selector = _selector_from_faiss_filter(filter)
@@ -525,7 +525,7 @@ def handle_Index(the_class):
         params.mid_easy_upper_gamma_ratio = float(mid_easy_upper_gamma_ratio)
         params.classify_start = int(classify_start)
         params.classify_end = int(classify_end)
-        params.chr_ema_decay = float(chr_ema_decay)
+        params.cfr_ema_decay = float(cfr_ema_decay)
         params.bounded_queue = True
         params.sel = selector
 
@@ -557,7 +557,7 @@ def handle_Index(the_class):
             bucket_gamma_ratios=(),
             classify_start=4,
             classify_end=16,
-            chr_ema_decay=0.8):
+            cfr_ema_decay=0.8):
         """Python wrapper for the Faiss paper-bucket adaptive-light query API."""
 
         selector = _selector_from_faiss_filter(filter)
@@ -581,7 +581,7 @@ def handle_Index(the_class):
         params.early_stop_ratio = float(early_stop_ratio)
         params.classify_start = int(classify_start)
         params.classify_end = int(classify_end)
-        params.chr_ema_decay = float(chr_ema_decay)
+        params.cfr_ema_decay = float(cfr_ema_decay)
         params.bounded_queue = True
         params.paper_bucket_mode = True
         params.paper_bucket_count = int(paper_bucket_count)
@@ -617,7 +617,7 @@ def handle_Index(the_class):
             bucket_gamma_ratios=(),
             classify_start=4,
             classify_end=16,
-            chr_ema_decay=0.8):
+            cfr_ema_decay=0.8):
         """Return labels plus per-query adaptive search analysis stats."""
 
         selector = _selector_from_faiss_filter(filter)
@@ -647,7 +647,7 @@ def handle_Index(the_class):
         params.early_stop_ratio = float(early_stop_ratio)
         params.classify_start = int(classify_start)
         params.classify_end = int(classify_end)
-        params.chr_ema_decay = float(chr_ema_decay)
+        params.cfr_ema_decay = float(cfr_ema_decay)
         params.bounded_queue = True
         params.paper_bucket_mode = True
         params.paper_bucket_count = int(paper_bucket_count)
@@ -810,7 +810,7 @@ def handle_Index(the_class):
         params.efSearch = int(ef)
         params.classify_start = int(classify_start)
         params.classify_end = int(classify_end)
-        params.chr_ema_decay = float(chr_ema_decay)
+        params.cfr_ema_decay = float(cfr_ema_decay)
         params.sel = selector
 
         def run_once(active_max_steps):
@@ -928,7 +928,7 @@ def handle_Index(the_class):
             if prev_num_threads is not None:
                 faiss.omp_set_num_threads(int(prev_num_threads))
 
-    def replacement_search_layer0_chr_summary(
+    def replacement_search_layer0_cfr_summary(
             self,
             x,
             k=10,
@@ -938,8 +938,8 @@ def handle_Index(the_class):
             filter=None,
             classify_start=4,
             classify_end=16,
-            chr_ema_decay=0.8):
-        """Return native Faiss per-query CHR window summaries for SAGE calibration."""
+            cfr_ema_decay=0.8):
+        """Return native Faiss per-query CFR window summaries for SAGE calibration."""
 
         selector = _selector_from_faiss_filter(filter)
         x = np.asarray(x)
@@ -982,7 +982,7 @@ def handle_Index(the_class):
             faiss.omp_set_num_threads(int(num_threads))
 
         try:
-            self.search_layer0_chr_summary_c(
+            self.search_layer0_cfr_summary_c(
                 n,
                 swig_ptr(x),
                 int(k),
@@ -1551,8 +1551,8 @@ def handle_Index(the_class):
                    replacement_compute_internal_lids, ignore_missing=True)
     replace_method(the_class, 'search_layer0_trace',
                    replacement_search_layer0_trace, ignore_missing=True)
-    replace_method(the_class, 'search_layer0_chr_summary',
-                   replacement_search_layer0_chr_summary, ignore_missing=True)
+    replace_method(the_class, 'search_layer0_cfr_summary',
+                   replacement_search_layer0_cfr_summary, ignore_missing=True)
     if hasattr(the_class, "knn_query_adaptive_light_c"):
         setattr(the_class, "knn_query_adaptive_light_paper_bucket",
                 replacement_knn_query_adaptive_light_paper_bucket)

@@ -324,11 +324,11 @@ class HnswIndex {
         auto mid_easy_query = py::array_t<bool>(stats_shape);
         auto ef_shrunk = py::array_t<bool>(stats_shape);
         auto early_stopped = py::array_t<bool>(stats_shape);
-        auto classify_chr_mean = py::array_t<float>(stats_shape);
+        auto classify_cfr_mean = py::array_t<float>(stats_shape);
         auto classify_popped_dist = py::array_t<float>(trace_shape);
         auto classify_furthest_dist = py::array_t<float>(trace_shape);
-        auto classify_chr = py::array_t<float>(trace_shape);
-        auto classify_smoothed_chr = py::array_t<float>(trace_shape);
+        auto classify_cfr = py::array_t<float>(trace_shape);
+        auto classify_smoothed_cfr = py::array_t<float>(trace_shape);
 
         auto initial_ef_buf = initial_ef.mutable_unchecked<1>();
         auto effective_ef_buf = effective_ef.mutable_unchecked<1>();
@@ -356,11 +356,11 @@ class HnswIndex {
         auto mid_easy_query_buf = mid_easy_query.mutable_unchecked<1>();
         auto ef_shrunk_buf = ef_shrunk.mutable_unchecked<1>();
         auto early_stopped_buf = early_stopped.mutable_unchecked<1>();
-        auto classify_chr_mean_buf = classify_chr_mean.mutable_unchecked<1>();
+        auto classify_cfr_mean_buf = classify_cfr_mean.mutable_unchecked<1>();
         auto classify_popped_dist_buf = classify_popped_dist.mutable_unchecked<2>();
         auto classify_furthest_dist_buf = classify_furthest_dist.mutable_unchecked<2>();
-        auto classify_chr_buf = classify_chr.mutable_unchecked<2>();
-        auto classify_smoothed_chr_buf = classify_smoothed_chr.mutable_unchecked<2>();
+        auto classify_cfr_buf = classify_cfr.mutable_unchecked<2>();
+        auto classify_smoothed_cfr_buf = classify_smoothed_cfr.mutable_unchecked<2>();
 
         for (size_t i = 0; i < nq; ++i) {
             const auto& stat = output.stats[i];
@@ -391,14 +391,14 @@ class HnswIndex {
             mid_easy_query_buf(row) = stat.mid_easy_query;
             ef_shrunk_buf(row) = stat.ef_shrunk;
             early_stopped_buf(row) = stat.early_stopped;
-            classify_chr_mean_buf(row) = stat.classify_chr_mean;
+            classify_cfr_mean_buf(row) = stat.classify_cfr_mean;
             for (int trace_i = 0; trace_i < rabitqlib::hnsw::AdaptiveLightStats::kClassifyTraceLen; ++trace_i) {
                 const auto col = static_cast<ssize_t>(trace_i);
                 const auto trace_idx = static_cast<size_t>(trace_i);
                 classify_popped_dist_buf(row, col) = stat.classify_popped_dist[trace_idx];
                 classify_furthest_dist_buf(row, col) = stat.classify_furthest_dist[trace_idx];
-                classify_chr_buf(row, col) = stat.classify_chr[trace_idx];
-                classify_smoothed_chr_buf(row, col) = stat.classify_smoothed_chr[trace_idx];
+                classify_cfr_buf(row, col) = stat.classify_cfr[trace_idx];
+                classify_smoothed_cfr_buf(row, col) = stat.classify_smoothed_cfr[trace_idx];
             }
         }
 
@@ -429,11 +429,11 @@ class HnswIndex {
         stats["mid_easy_query"] = mid_easy_query;
         stats["ef_shrunk"] = ef_shrunk;
         stats["early_stopped"] = early_stopped;
-        stats["classify_chr_mean"] = classify_chr_mean;
+        stats["classify_cfr_mean"] = classify_cfr_mean;
         stats["classify_popped_dist"] = classify_popped_dist;
         stats["classify_furthest_dist"] = classify_furthest_dist;
-        stats["classify_chr"] = classify_chr;
-        stats["classify_smoothed_chr"] = classify_smoothed_chr;
+        stats["classify_cfr"] = classify_cfr;
+        stats["classify_smoothed_cfr"] = classify_smoothed_cfr;
         return py::make_tuple(ids, dists, stats);
     }
 

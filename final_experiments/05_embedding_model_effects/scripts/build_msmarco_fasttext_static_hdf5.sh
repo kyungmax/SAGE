@@ -16,7 +16,7 @@ TOKEN_VECTOR_CACHE_SIZE="${TOKEN_VECTOR_CACHE_SIZE:-200000}"
 MEAN_OUT="${MEAN_OUT:-${DATASET_DIR}/msmarco-v1-fasttext-cc300d-full-ip.hdf5}"
 IDF_CACHE="${IDF_CACHE:-${DATASET_DIR}/msmarco_passage_fasttext_static/fasttext-cc300d_msmarco_collection_token_idf.npz}"
 LOG_DIR="${LOG_DIR:-${ROOT_DIR}/logs}"
-LOG="${LOG:-${LOG_DIR}/build_msmarco_fasttext_static_hdf5_$(date '+%Y%m%d_%H%M%S').log}"
+LOG="${LOG:-${LOG_DIR}/build_msmarco_fasttext_static_hdf5.log}"
 
 COMMON_ARGS=(
   --sample-size 0

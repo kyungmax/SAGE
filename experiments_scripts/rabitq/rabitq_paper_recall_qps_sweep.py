@@ -458,7 +458,7 @@ def finite_quantile(values: np.ndarray, mass: float) -> float:
     finite = np.asarray(values, dtype=np.float64)
     finite = finite[np.isfinite(finite)]
     if finite.size == 0:
-        raise RuntimeError("No finite CHR values available for calibration.")
+        raise RuntimeError("No finite CFR values available for calibration.")
     return float(np.quantile(finite, float(np.clip(mass, 0.0, 1.0))))
 
 
@@ -506,18 +506,18 @@ def route_count_signature(routed_efs: np.ndarray) -> str:
     return ";".join(f"{int(value)}:{int(count)}" for value, count in zip(values, counts))
 
 
-def route_ef_for_chr_ratio(
+def route_ef_for_cfr_ratio(
     *,
     selection_ef: int,
     k: int,
     route_efs: tuple[int, ...],
     bucket_gamma_ratios: tuple[float, ...],
-    chr_ratio: float,
+    cfr_ratio: float,
 ) -> int:
-    if not np.isfinite(chr_ratio):
+    if not np.isfinite(cfr_ratio):
         return int(selection_ef)
     for route_ef, gamma in zip(route_efs, bucket_gamma_ratios):
-        if float(chr_ratio) <= float(gamma) + 1e-12:
+        if float(cfr_ratio) <= float(gamma) + 1e-12:
             return max(int(k), int(route_ef))
     return int(selection_ef)
 
@@ -556,7 +556,7 @@ def search_hide(
     return np.asarray(labels, dtype=np.int64), np.asarray(dists, dtype=np.float32)
 
 
-def collect_chr_hide(
+def collect_cfr_hide(
     idx: HnswIndex,
     vectors: np.ndarray,
     ids: np.ndarray,
@@ -610,7 +610,7 @@ def build_policy(
 
     ef_values = sorted({int(value) for value in args.efs})
     recall_cache: dict[int, np.ndarray] = {}
-    chr_cache: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+    cfr_cache: dict[int, tuple[np.ndarray, np.ndarray]] = {}
 
     def recall_for(ef_value: int) -> np.ndarray:
         resolved_ef = max(TOPK, int(ef_value))
@@ -629,19 +629,19 @@ def build_policy(
     for ef in ef_values:
         routes = route_efs_for_paper_floor(ef, PAPER_BUCKET_COUNT)
         pair_targets = pair_targets_for_paper_floor(routes)
-        _, stats = collect_chr_hide(idx, probe_vectors, probe_ids, ef, TOPK, int(args.calibration_threads))
-        chr_values = np.asarray(stats["classify_chr_mean"], dtype=np.float32)
-        usable = np.isfinite(chr_values)
-        chr_cache[ef] = (chr_values, usable)
+        _, stats = collect_cfr_hide(idx, probe_vectors, probe_ids, ef, TOPK, int(args.calibration_threads))
+        cfr_values = np.asarray(stats["classify_cfr_mean"], dtype=np.float32)
+        usable = np.isfinite(cfr_values)
+        cfr_cache[ef] = (cfr_values, usable)
         if not np.any(usable):
-            raise RuntimeError(f"No usable hide-node CHR values for ef={ef}")
+            raise RuntimeError(f"No usable hide-node CFR values for ef={ef}")
 
         route_thetas: list[float] = []
         acceptable_rates: list[float] = []
         for target_ef in pair_targets:
             ok = recall_for(target_ef)[usable] + 1e-12 >= float(args.acceptable_recall)
             acceptable_rate = float(np.mean(ok))
-            theta = max(finite_quantile(chr_values[usable], acceptable_rate), 1e-6)
+            theta = max(finite_quantile(cfr_values[usable], acceptable_rate), 1e-6)
             route_thetas.append(theta)
             acceptable_rates.append(acceptable_rate)
 
@@ -656,9 +656,9 @@ def build_policy(
             "bucket_gamma_ratios": gammas,
             "super_easy_gamma_ratio": gammas[0] if gammas else float("nan"),
             "mid_easy_upper_gamma_ratio": gammas[1] if len(gammas) > 1 else float("nan"),
-            "calibration_chr_mean": float(np.mean(chr_values[usable])),
-            "calibration_chr_p50": float(np.quantile(chr_values[usable], 0.50)),
-            "calibration_chr_p95": float(np.quantile(chr_values[usable], 0.95)),
+            "calibration_cfr_mean": float(np.mean(cfr_values[usable])),
+            "calibration_cfr_p50": float(np.quantile(cfr_values[usable], 0.50)),
+            "calibration_cfr_p95": float(np.quantile(cfr_values[usable], 0.95)),
             "usable_probe_count": int(np.count_nonzero(usable)),
             "baseline_recall_at_ef": float(recall_curve[ef]),
         }
@@ -677,20 +677,20 @@ def build_policy(
         routes = tuple(int(value) for value in entry["route_efs"])
         gammas = tuple(float(value) for value in entry["bucket_gamma_ratios"])
         tau = float(entry["tau"])
-        chr_values, usable = chr_cache[ef]
-        finite_chr_values = chr_values[usable & np.isfinite(chr_values)]
+        cfr_values, usable = cfr_cache[ef]
+        finite_cfr_values = cfr_values[usable & np.isfinite(cfr_values)]
 
         if routes and gammas and len(routes) == len(gammas):
-            for query_idx, chr_value in enumerate(chr_values):
-                if not usable[query_idx] or not np.isfinite(chr_value):
+            for query_idx, cfr_value in enumerate(cfr_values):
+                if not usable[query_idx] or not np.isfinite(cfr_value):
                     continue
-                chr_ratio = float(chr_value) / max(tau, 1e-6)
-                routed_ef = route_ef_for_chr_ratio(
+                cfr_ratio = float(cfr_value) / max(tau, 1e-6)
+                routed_ef = route_ef_for_cfr_ratio(
                     selection_ef=int(ef),
                     k=TOPK,
                     route_efs=routes,
                     bucket_gamma_ratios=gammas,
-                    chr_ratio=chr_ratio,
+                    cfr_ratio=cfr_ratio,
                 )
                 routed_efs[query_idx] = int(routed_ef)
                 if int(routed_ef) != int(ef):
@@ -706,9 +706,9 @@ def build_policy(
                 "offline_vanilla_recall": float(np.mean(full_recalls)),
                 "calibration_query_count": int(len(selected_df)),
                 "calibration_lid_pool_count": int(lid_pool_count),
-                "usable_chr_query_count": int(finite_chr_values.size),
-                "cfr_metric": "classify_chr_mean",
-                **finite_stats(finite_chr_values),
+                "usable_cfr_query_count": int(finite_cfr_values.size),
+                "cfr_metric": "classify_cfr_mean",
+                **finite_stats(finite_cfr_values),
                 "offline_num_threads": int(args.calibration_threads),
                 "mixed_threshold_mode": "paper_floor_half",
                 "mixed_bucket_count": PAPER_BUCKET_COUNT,

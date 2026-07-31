@@ -265,9 +265,9 @@ class Index {
         d["unvisited_neighbor_count"] = s.unvisited_neighbor_count;
         d["accepted_neighbor_count"] = s.accepted_neighbor_count;
         d["runtime_accepted_rate"] = s.runtime_accepted_rate;
-        d["runtime_chr"] = s.runtime_chr;
-        d["runtime_smoothed_chr"] = s.runtime_smoothed_chr;
-        d["runtime_classify_chr_mean"] = s.runtime_classify_chr_mean;
+        d["runtime_cfr"] = s.runtime_cfr;
+        d["runtime_smoothed_cfr"] = s.runtime_smoothed_cfr;
+        d["runtime_classify_cfr_mean"] = s.runtime_classify_cfr_mean;
         d["runtime_classification_evaluated"] = s.runtime_classification_evaluated;
         d["runtime_is_easy_query"] = s.runtime_is_easy_query;
         d["runtime_is_super_easy_query"] = s.runtime_is_super_easy_query;
@@ -495,8 +495,8 @@ class Index {
         };
     }
 
-    // Keep CHR aggregation aligned with the shared Python/FAISS calibrator.
-    py::dict searchLayer0ChrSummary(
+    // Keep CFR aggregation aligned with the shared Python/FAISS calibrator.
+    py::dict searchLayer0CfrSummary(
         py::object input,
         size_t k,
         size_t ef,
@@ -505,8 +505,8 @@ class Index {
     ) {
         static constexpr int CLASSIFY_START = 4;
         static constexpr int CLASSIFY_END = 16;
-        static constexpr double CHR_EMA_DECAY = 0.8;
-        static constexpr double CHR_EMA_UPDATE = 1.0 - CHR_EMA_DECAY;
+        static constexpr double CFR_EMA_DECAY = 0.8;
+        static constexpr double CFR_EMA_UPDATE = 1.0 - CFR_EMA_DECAY;
 
         if (appr_alg->cur_element_count == 0) {
             throw std::runtime_error("Index is empty. Cannot perform search.");
@@ -564,16 +564,16 @@ class Index {
 
                     double popped = (double)s.popped_query_dist;
                     double furthest = (double)s.furthest_dist;
-                    double chr = std::numeric_limits<double>::quiet_NaN();
+                    double cfr = std::numeric_limits<double>::quiet_NaN();
                     if (std::isfinite(popped) && std::isfinite(furthest) &&
                         std::fabs(furthest) > 1e-12) {
-                        chr = std::fabs(popped) / std::fabs(furthest);
+                        cfr = std::fabs(popped) / std::fabs(furthest);
                     }
-                    if (std::isfinite(chr)) {
+                    if (std::isfinite(cfr)) {
                         if (std::isnan(ema)) {
-                            ema = chr;
+                            ema = cfr;
                         } else {
-                            ema = CHR_EMA_DECAY * ema + CHR_EMA_UPDATE * chr;
+                            ema = CFR_EMA_DECAY * ema + CFR_EMA_UPDATE * cfr;
                         }
                     }
                     if (observed_full_pop >= CLASSIFY_START &&
@@ -1131,7 +1131,7 @@ class Index {
         float mid_easy_upper_gamma_ratio = std::numeric_limits<float>::quiet_NaN(),
         int classify_start = 4,
         int classify_end = 16,
-        float chr_ema_decay = 0.8f
+        float cfr_ema_decay = 0.8f
     ) {
         if (appr_alg->cur_element_count == 0) {
             throw std::runtime_error("Index is empty. Cannot perform search.");
@@ -1172,7 +1172,7 @@ class Index {
                         mid_easy_upper_gamma_ratio,
                         classify_start,
                         classify_end,
-                        chr_ema_decay
+                        cfr_ema_decay
                     );
 
                     if (result.size() != k) {
@@ -1203,7 +1203,7 @@ class Index {
                         mid_easy_upper_gamma_ratio,
                         classify_start,
                         classify_end,
-                        chr_ema_decay
+                        cfr_ema_decay
                     );
 
                     if (result.size() != k) {
@@ -1241,7 +1241,7 @@ class Index {
         const std::vector<float>& bucket_gamma_ratios = std::vector<float>(),
         int classify_start = 4,
         int classify_end = 16,
-        float chr_ema_decay = 0.8f
+        float cfr_ema_decay = 0.8f
     ) {
         if (appr_alg->cur_element_count == 0) {
             throw std::runtime_error("Index is empty. Cannot perform search.");
@@ -1287,7 +1287,7 @@ class Index {
                         bucket_gamma_ratios,
                         classify_start,
                         classify_end,
-                        chr_ema_decay
+                        cfr_ema_decay
                     );
 
                     if (result.size() != k) {
@@ -1318,7 +1318,7 @@ class Index {
                         bucket_gamma_ratios,
                         classify_start,
                         classify_end,
-                        chr_ema_decay
+                        cfr_ema_decay
                     );
 
                     if (result.size() != k) {
@@ -2236,7 +2236,7 @@ per-query reduced-step arrays or aggregate stop counts.
             py::arg("mid_easy_upper_gamma_ratio") = std::numeric_limits<float>::quiet_NaN(),
             py::arg("classify_start") = 4,
             py::arg("classify_end") = 16,
-            py::arg("chr_ema_decay") = 0.8f
+            py::arg("cfr_ema_decay") = 0.8f
         )
         .def("knn_query_adaptive_light_paper_bucket",
             &Index<float>::knnQueryAdaptiveLightPaperBucket,
@@ -2258,7 +2258,7 @@ using a switch-based bucket selector at classify time.
             py::arg("bucket_gamma_ratios") = std::vector<float>(),
             py::arg("classify_start") = 4,
             py::arg("classify_end") = 16,
-            py::arg("chr_ema_decay") = 0.8f
+            py::arg("cfr_ema_decay") = 0.8f
         )
         .def("knn_query_sage",
             &Index<float>::knnQueryAdaptiveLightPaperBucket,
@@ -2280,7 +2280,7 @@ Legacy experiment scripts may still call `knn_query_adaptive_light_paper_bucket`
             py::arg("bucket_gamma_ratios") = std::vector<float>(),
             py::arg("classify_start") = 4,
             py::arg("classify_end") = 16,
-            py::arg("chr_ema_decay") = 0.8f
+            py::arg("cfr_ema_decay") = 0.8f
         )
         .def("get_lids", &Index<float>::getLids)
         .def("calc_lids_internal", &Index<float>::calcLidsInternal,
@@ -2317,8 +2317,8 @@ Legacy experiment scripts may still call `knn_query_adaptive_light_paper_bucket`
             py::arg("hide_labels"),
             py::arg("num_threads") = -1
         )
-        .def("search_layer0_chr_summary",
-            &Index<float>::searchLayer0ChrSummary,
+        .def("search_layer0_cfr_summary",
+            &Index<float>::searchLayer0CfrSummary,
             py::arg("data"),
             py::arg("k"),
             py::arg("ef"),

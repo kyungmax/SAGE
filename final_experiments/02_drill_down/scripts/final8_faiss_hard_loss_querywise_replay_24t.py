@@ -49,7 +49,7 @@ DEFAULT_FAISS_INDEX_ROOT = Path(
 ).expanduser()
 
 from common.adaptive_runtime import evaluate_recall_per_query, load_dataset_with_special_cases  # noqa: E402
-from common.projected_local_acceptable_runtime import _extract_chr_mean_by_query  # noqa: E402
+from common.projected_local_acceptable_runtime import _extract_cfr_mean_by_query  # noqa: E402
 
 
 build_original_index = None
@@ -89,11 +89,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-threads", type=int, default=24)
     parser.add_argument("--workers", type=int, default=24)
     parser.add_argument("--batch-size", type=int, default=512)
-    parser.add_argument("--chr-batch-size", type=int, default=2048)
+    parser.add_argument("--cfr-batch-size", type=int, default=2048)
     parser.add_argument("--tmin-pops", type=int, default=25)
     parser.add_argument("--classify-start", type=int, default=4)
     parser.add_argument("--classify-end", type=int, default=16)
-    parser.add_argument("--chr-ema-decay", type=float, default=0.8)
+    parser.add_argument("--cfr-ema-decay", type=float, default=0.8)
     parser.add_argument("--hard-stagnation-count", type=int, default=20)
     args = parser.parse_args()
     args.datasets = tuple(part.strip() for part in str(args.datasets).split(",") if part.strip())
@@ -153,10 +153,10 @@ def load_policy(run_root: Path, stem: str, ef: int, k: int, m: int, ef_construct
     return tau, route_efs, gammas, path
 
 
-def route_for_chr(chr_value: float, *, tau: float, selection_ef: int, route_efs: tuple[int, ...], gammas: tuple[float, ...], k: int) -> int:
-    if not np.isfinite(chr_value):
+def route_for_cfr(cfr_value: float, *, tau: float, selection_ef: int, route_efs: tuple[int, ...], gammas: tuple[float, ...], k: int) -> int:
+    if not np.isfinite(cfr_value):
         return int(selection_ef)
-    ratio = float(chr_value) / max(float(tau), 1e-12)
+    ratio = float(cfr_value) / max(float(tau), 1e-12)
     for route_ef, gamma in zip(route_efs, gammas):
         if ratio <= float(gamma) + 1e-12:
             return max(int(k), int(route_ef))
@@ -184,7 +184,7 @@ def sage_labels(
     tmin_pops: int,
     classify_start: int,
     classify_end: int,
-    chr_ema_decay: float,
+    cfr_ema_decay: float,
     hard_stagnation_count: int,
     num_threads: int,
     batch_size: int,
@@ -206,14 +206,14 @@ def sage_labels(
             bucket_gamma_ratios=[float(value) for value in gammas],
             classify_start=int(classify_start),
             classify_end=int(classify_end),
-            chr_ema_decay=float(chr_ema_decay),
+            cfr_ema_decay=float(cfr_ema_decay),
             num_threads=int(num_threads),
         )
         parts.append(np.asarray(labels, dtype=np.int64))
     return np.vstack(parts) if parts else np.empty((0, int(k)), dtype=np.int64)
 
 
-def extract_chr(index: Any, queries: np.ndarray, qids: np.ndarray, *, ef: int, k: int, num_threads: int, batch_size: int) -> tuple[np.ndarray, np.ndarray]:
+def extract_cfr(index: Any, queries: np.ndarray, qids: np.ndarray, *, ef: int, k: int, num_threads: int, batch_size: int) -> tuple[np.ndarray, np.ndarray]:
     parts: list[pd.DataFrame] = []
     for start in range(0, len(queries), int(batch_size)):
         end = min(start + int(batch_size), len(queries))
@@ -224,7 +224,7 @@ def extract_chr(index: Any, queries: np.ndarray, qids: np.ndarray, *, ef: int, k
                 "lid": np.full(end - start, np.nan, dtype=np.float64),
             }
         )
-        part = _extract_chr_mean_by_query(
+        part = _extract_cfr_mean_by_query(
             index=index,
             selected_df=selected,
             query_vectors=np.asarray(queries[start:end], dtype=np.float32),
@@ -235,8 +235,8 @@ def extract_chr(index: Any, queries: np.ndarray, qids: np.ndarray, *, ef: int, k
         parts.append(part)
     df = pd.concat(parts, ignore_index=True).sort_values("selection_rank").reset_index(drop=True)
     usable = df["usable_for_mean_window_calibration"].astype(bool).to_numpy(dtype=bool)
-    chr_values = pd.to_numeric(df["mean_smoothed_chr_classify_window"], errors="coerce").to_numpy(dtype=np.float64)
-    return chr_values, usable
+    cfr_values = pd.to_numeric(df["mean_smoothed_cfr_classify_window"], errors="coerce").to_numpy(dtype=np.float64)
+    return cfr_values, usable
 
 
 def analysis_stop_one(index: Any, query: np.ndarray, gt: np.ndarray, *, ef: int, k: int, tau: float, gammas: tuple[float, ...], args: argparse.Namespace) -> tuple[float, int, int, int]:
@@ -252,7 +252,7 @@ def analysis_stop_one(index: Any, query: np.ndarray, gt: np.ndarray, *, ef: int,
         bucket_gamma_ratios=[float(value) for value in gammas],
         classify_start=int(args.classify_start),
         classify_end=int(args.classify_end),
-        chr_ema_decay=float(args.chr_ema_decay),
+        cfr_ema_decay=float(args.cfr_ema_decay),
         num_threads=1,
     )
     labels = np.asarray(out[0][0], dtype=np.int64)
@@ -281,7 +281,7 @@ def no_stop_batch(index: Any, queries: np.ndarray, gt: np.ndarray, *, ef: int, k
             bucket_gamma_ratios=[float(value) for value in gammas],
             classify_start=int(args.classify_start),
             classify_end=int(args.classify_end),
-            chr_ema_decay=float(args.chr_ema_decay),
+            cfr_ema_decay=float(args.cfr_ema_decay),
             num_threads=int(args.num_threads),
         )
         labels_parts.append(np.asarray(out[0], dtype=np.int64))
@@ -427,11 +427,11 @@ def run_dataset_ef(dataset: str, ef: int, qgroups: pd.DataFrame, args: argparse.
         eval_gt_label = f"{str(args.backend)}_ef{int(args.pseudo_gt_ef)}"
     vanilla_labels = knn_labels(index, queries, ef=int(ef), k=int(args.k), num_threads=int(args.num_threads), batch_size=int(args.batch_size))
     vanilla_recall = evaluate_recall_per_query(vanilla_labels, eval_gt, int(args.k)).astype(np.float64)
-    chr_values, usable = extract_chr(index, queries, qids, ef=int(ef), k=int(args.k), num_threads=int(args.num_threads), batch_size=int(args.chr_batch_size))
+    cfr_values, usable = extract_cfr(index, queries, qids, ef=int(ef), k=int(args.k), num_threads=int(args.num_threads), batch_size=int(args.cfr_batch_size))
     routed = np.asarray(
         [
-            route_for_chr(value, tau=tau, selection_ef=ef, route_efs=route_efs, gammas=gammas, k=args.k)
-            for value in chr_values
+            route_for_cfr(value, tau=tau, selection_ef=ef, route_efs=route_efs, gammas=gammas, k=args.k)
+            for value in cfr_values
         ],
         dtype=np.int64,
     )
@@ -455,7 +455,7 @@ def run_dataset_ef(dataset: str, ef: int, qgroups: pd.DataFrame, args: argparse.
         tmin_pops=int(args.tmin_pops),
         classify_start=int(args.classify_start),
         classify_end=int(args.classify_end),
-        chr_ema_decay=float(args.chr_ema_decay),
+        cfr_ema_decay=float(args.cfr_ema_decay),
         hard_stagnation_count=int(args.hard_stagnation_count),
         num_threads=int(args.num_threads),
         batch_size=int(args.batch_size),
@@ -473,8 +473,8 @@ def run_dataset_ef(dataset: str, ef: int, qgroups: pd.DataFrame, args: argparse.
             "tau": float(tau),
             "route_efs": "/".join(str(value) for value in route_efs + (int(ef),)),
             "bucket_gammas": "/".join(f"{value:.6f}" for value in gammas),
-            "chr": chr_values,
-            "usable_chr": usable,
+            "cfr": cfr_values,
+            "usable_cfr": usable,
             "routed_ef": routed,
             "vanilla_recall": vanilla_recall,
             "route_recall": route_recall,
@@ -522,7 +522,7 @@ def main() -> int:
         f"# Main8 {BACKEND_LABEL} Hard-Loss Querywise Replay\n\n"
         f"Backend: {str(args.backend)}. "
         "Hard group is read from the new exact-GT/groupDef1024 drilldown query groups. "
-        "False-easy loss means exact Ours has positive hard-group recall loss and the CHR route is below the selected efSearch. "
+        "False-easy loss means exact Ours has positive hard-group recall loss and the CFR route is below the selected efSearch. "
         "Hard-stagnation loss is measured on full-route loss rows by comparing adaptive stop against the same analysis path with stop disabled.\n",
         encoding="utf-8",
     )

@@ -1,1 +1,24 @@
 paper_tex/
+index/*
+!index/README.md
+datasets/*
+!datasets/README.md
+sage.local.env
+# Local editor state
+.idea/
+.gitignore.local
+# Python/cache/build outputs
+__pycache__/
+*.py[cod]
+*.so
+*.dylib
+*.dll
+*.o
+*.o.d
+*.a
+*.out
+# CMake/build directories
+build/
+build-*/
+cmake-build-*/
+experiments_scripts/ada-ef/build-simd-avx512/
