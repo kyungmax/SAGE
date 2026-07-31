@@ -113,8 +113,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cfr-ema-decay", type=float, default=0.8)
     parser.add_argument("--pair-gap", type=int, default=2)
     parser.add_argument("--groups", default=",".join(GROUP_ORDER), help="Comma list of groups to benchmark: easy,medium,hard")
-    parser.add_argument("--hard-stagnation", choices=("on", "off", "both"), default="off")
-    parser.add_argument("--hard-stagnation-count", type=int, default=20)
     args = parser.parse_args()
     args.datasets = tuple(part.strip() for part in str(args.datasets).split(",") if part.strip())
     args.efs = tuple(int(part.strip()) for part in str(args.efs).split(",") if part.strip())
@@ -125,8 +123,6 @@ def parse_args() -> argparse.Namespace:
         raise ValueError(f"--groups contains unsupported values: {invalid_groups}")
     if not args.groups:
         raise ValueError("--groups must not be empty")
-    args.hard_stagnation_values = ("on", "off") if str(args.hard_stagnation) == "both" else (str(args.hard_stagnation),)
-    args.hard_stagnation_enabled = args.hard_stagnation_values[0] == "on"
     (
         args.easy_threshold_scale,
         args.mid_threshold_scale,
@@ -140,8 +136,6 @@ def parse_args() -> argparse.Namespace:
         raise ValueError("--k must be positive")
     if not set(args.efs).issubset(set(args.calibration_efs)):
         raise ValueError("--calibration-efs must include every reported --efs value")
-    if int(args.hard_stagnation_count) < 1:
-        raise ValueError("--hard-stagnation-count must be positive")
     if str(args.eval_gt_source) == "pseudo_hnsw" and int(args.pseudo_gt_ef) < int(args.group_def_ef):
         raise ValueError("--pseudo-gt-ef must be >= --group-def-ef")
     return args
@@ -338,14 +332,10 @@ def benchmark_sage(
     tau: float,
     gammas: tuple[float, ...],
     args: argparse.Namespace,
-    hard_stagnation_enabled: bool | None = None,
 ) -> dict[str, Any]:
     query_sage = getattr(index, "knn_query_sage", None)
     if query_sage is None:
         query_sage = getattr(index, "knn_query_adaptive_light_paper_bucket")
-    if hard_stagnation_enabled is None:
-        hard_stagnation_enabled = bool(args.hard_stagnation_enabled)
-
     def query() -> tuple[np.ndarray, np.ndarray]:
         kwargs = {
             "k": int(k),
@@ -356,15 +346,8 @@ def benchmark_sage(
             "paper_bucket_count": int(len(gammas) + 1),
             "bucket_gamma_ratios": [float(value) for value in gammas],
             "num_threads": int(args.online_num_threads),
-            "hard_stagnation_enabled": bool(hard_stagnation_enabled),
-            "hard_stagnation_count": int(args.hard_stagnation_count),
         }
-        try:
-            labels, dists = query_sage(queries, **kwargs)
-        except TypeError:
-            kwargs.pop("hard_stagnation_enabled", None)
-            kwargs.pop("hard_stagnation_count", None)
-            labels, dists = query_sage(queries, **kwargs)
+        labels, dists = query_sage(queries, **kwargs)
         return np.asarray(labels, dtype=np.int64), np.asarray(dists)
 
     return benchmark_query(query, gt, k=int(k), warmup_runs=int(args.warmup_runs), measured_runs=int(args.measured_runs))
@@ -383,7 +366,6 @@ def write_readme(output_dir: Path, args: argparse.Namespace) -> None:
         f"- group definition: Vanilla {BACKEND_LABEL} efSearch={int(args.group_def_ef)}\n"
         "- split: top 30% easy, middle 40% medium, bottom 30% hard\n"
         f"- benchmarked groups: {','.join(args.groups)}\n"
-        f"- hard-stagnation modes: {','.join(args.hard_stagnation_values)}; count={int(args.hard_stagnation_count)}\n"
         f"- online/offline threads: {int(args.online_num_threads)}/{int(args.offline_num_threads)}\n"
         f"- calibration policy remains the final implementation mixed policy calibrated against {BACKEND_LABEL} pseudo GT.\n"
         "- SAGE runtime call uses the current `knn_query_sage` signature exposed by the selected backend.\n",
@@ -562,92 +544,83 @@ def run_dataset(args: argparse.Namespace, dataset: str, all_query_groups: list[p
                 "classify_end": int(args.classify_end),
                 "cfr_ema_decay": float(args.cfr_ema_decay),
                 "pair_gap": int(args.pair_gap),
-                "hard_stagnation_count": int(args.hard_stagnation_count),
             }
-            for hard_stagnation_value in args.hard_stagnation_values:
-                hard_stagnation_enabled = hard_stagnation_value == "on"
-                ours = benchmark_sage(
-                    index,
-                    group_test,
-                    group_gt,
-                    ef=int(ef),
-                    k=int(args.k),
-                    tau=float(tau_by_ef[int(ef)]),
-                    gammas=gammas,
-                    args=args,
-                    hard_stagnation_enabled=hard_stagnation_enabled,
-                )
-                ours_recall = float(ours["recall"])
-                ours_latency = float(ours["latency_per_query_mean_ms"])
-                base = {
+            ours = benchmark_sage(
+                index,
+                group_test,
+                group_gt,
+                ef=int(ef),
+                k=int(args.k),
+                tau=float(tau_by_ef[int(ef)]),
+                gammas=gammas,
+                args=args,
+            )
+            ours_recall = float(ours["recall"])
+            ours_latency = float(ours["latency_per_query_mean_ms"])
+            for method, metrics in (("Vanilla", vanilla), ("Ours", ours)):
+                row = {
                     **base_common,
-                    "hard_stagnation_mode": hard_stagnation_value,
-                    "hard_stagnation_enabled": bool(hard_stagnation_enabled),
+                    "method": method,
+                    "enable_stop": method == "Ours",
+                    "recall": float(metrics["recall"]),
+                    "qps": float(metrics["qps"]),
+                    "adaptive_max_dist_mean": float(metrics.get("adaptive_max_dist_mean", np.nan)),
+                    "stop_count": np.nan,
+                    "reduced_steps_mean": np.nan,
+                    "reduced_steps_max": np.nan,
+                    "query_count": int(metrics["query_count"]),
+                    "batch_latency_mean_ms": float(metrics["batch_latency_mean_ms"]),
+                    "batch_latency_p50_ms": float(metrics["batch_latency_p50_ms"]),
+                    "batch_latency_p95_ms": float(metrics["batch_latency_p95_ms"]),
+                    "batch_latency_min_ms": float(metrics["batch_latency_min_ms"]),
+                    "batch_latency_max_ms": float(metrics["batch_latency_max_ms"]),
+                    "latency_per_query_mean_ms": float(metrics["latency_per_query_mean_ms"]),
+                    "distance_computations_mean": float(metrics.get("distance_computations_mean", np.nan)),
+                    "distance_computations_per_query_mean": float(metrics.get("distance_computations_per_query_mean", np.nan)),
+                    "distance_computations_min": float(metrics.get("distance_computations_min", np.nan)),
+                    "distance_computations_max": float(metrics.get("distance_computations_max", np.nan)),
+                    "hnsw_hops_mean": float(metrics.get("hnsw_hops_mean", np.nan)),
+                    "hnsw_hops_per_query_mean": float(metrics.get("hnsw_hops_per_query_mean", np.nan)),
                 }
-                for method, metrics in (("Vanilla", vanilla), ("Ours", ours)):
-                    row = {
-                        **base,
-                        "method": method,
-                        "enable_stop": method == "Ours",
-                        "recall": float(metrics["recall"]),
-                        "qps": float(metrics["qps"]),
-                        "adaptive_max_dist_mean": float(metrics.get("adaptive_max_dist_mean", np.nan)),
-                        "stop_count": np.nan,
-                        "reduced_steps_mean": np.nan,
-                        "reduced_steps_max": np.nan,
-                        "query_count": int(metrics["query_count"]),
-                        "batch_latency_mean_ms": float(metrics["batch_latency_mean_ms"]),
-                        "batch_latency_p50_ms": float(metrics["batch_latency_p50_ms"]),
-                        "batch_latency_p95_ms": float(metrics["batch_latency_p95_ms"]),
-                        "batch_latency_min_ms": float(metrics["batch_latency_min_ms"]),
-                        "batch_latency_max_ms": float(metrics["batch_latency_max_ms"]),
-                        "latency_per_query_mean_ms": float(metrics["latency_per_query_mean_ms"]),
-                        "distance_computations_mean": float(metrics.get("distance_computations_mean", np.nan)),
-                        "distance_computations_per_query_mean": float(metrics.get("distance_computations_per_query_mean", np.nan)),
-                        "distance_computations_min": float(metrics.get("distance_computations_min", np.nan)),
-                        "distance_computations_max": float(metrics.get("distance_computations_max", np.nan)),
-                        "hnsw_hops_mean": float(metrics.get("hnsw_hops_mean", np.nan)),
-                        "hnsw_hops_per_query_mean": float(metrics.get("hnsw_hops_per_query_mean", np.nan)),
-                    }
-                    sweep_rows.append(row)
-                recall_delta_pp = (ours_recall - vanilla_recall) * 100.0
-                recall_loss_pp = -recall_delta_pp
-                pair_rows.append(
-                    {
-                        **base,
-                        "vanilla_recall": vanilla_recall,
-                        "ours_recall": ours_recall,
-                        "recall_delta_ours_minus_vanilla_pp": recall_delta_pp,
-                        "recall_loss_vs_vanilla_pp": recall_loss_pp,
-                        "recall_loss_clamped_pp": max(0.0, recall_loss_pp),
-                        "vanilla_qps": float(vanilla["qps"]),
-                        "ours_qps": float(ours["qps"]),
-                        "qps_gain_vs_vanilla_pct": (float(ours["qps"]) / float(vanilla["qps"]) - 1.0) * 100.0 if float(vanilla["qps"]) > 0 else np.nan,
-                        "latency_speedup_vs_vanilla": vanilla_latency / ours_latency if ours_latency > 0.0 else np.nan,
-                        "vanilla_latency_per_query_mean_ms": vanilla_latency,
-                        "ours_latency_per_query_mean_ms": ours_latency,
-                        "vanilla_distance_computations_per_query_mean": float(vanilla.get("distance_computations_per_query_mean", np.nan)),
-                        "ours_distance_computations_per_query_mean": float(ours.get("distance_computations_per_query_mean", np.nan)),
-                        "distance_computation_reduction_vs_vanilla_pct": (
-                            (1.0 - float(ours.get("distance_computations_per_query_mean", np.nan)) / float(vanilla.get("distance_computations_per_query_mean", np.nan))) * 100.0
-                            if float(vanilla.get("distance_computations_per_query_mean", np.nan)) > 0.0
-                            else np.nan
-                        ),
-                        "distance_computation_speedup_vs_vanilla": (
-                            float(vanilla.get("distance_computations_per_query_mean", np.nan)) / float(ours.get("distance_computations_per_query_mean", np.nan))
-                            if float(ours.get("distance_computations_per_query_mean", np.nan)) > 0.0
-                            else np.nan
-                        ),
-                        "vanilla_distance_computations_mean": float(vanilla.get("distance_computations_mean", np.nan)),
-                        "ours_distance_computations_mean": float(ours.get("distance_computations_mean", np.nan)),
-                    }
-                )
-                print(
-                    f"[GROUP] {stem} ef={int(ef)} {group_name} hard_stagnation={hard_stagnation_value} "
-                    f"vanilla={vanilla_recall:.5f} ours={ours_recall:.5f} "
-                    f"loss={recall_loss_pp:+.3f}pp speedup={pair_rows[-1]['latency_speedup_vs_vanilla']:.3f}x",
-                    flush=True,
-                )
+                sweep_rows.append(row)
+            recall_delta_pp = (ours_recall - vanilla_recall) * 100.0
+            recall_loss_pp = -recall_delta_pp
+            pair_rows.append(
+                {
+                    **base_common,
+                    "vanilla_recall": vanilla_recall,
+                    "ours_recall": ours_recall,
+                    "recall_delta_ours_minus_vanilla_pp": recall_delta_pp,
+                    "recall_loss_vs_vanilla_pp": recall_loss_pp,
+                    "recall_loss_clamped_pp": max(0.0, recall_loss_pp),
+                    "vanilla_qps": float(vanilla["qps"]),
+                    "ours_qps": float(ours["qps"]),
+                    "qps_gain_vs_vanilla_pct": (float(ours["qps"]) / float(vanilla["qps"]) - 1.0) * 100.0 if float(vanilla["qps"]) > 0 else np.nan,
+                    "latency_speedup_vs_vanilla": vanilla_latency / ours_latency if ours_latency > 0.0 else np.nan,
+                    "vanilla_latency_per_query_mean_ms": vanilla_latency,
+                    "ours_latency_per_query_mean_ms": ours_latency,
+                    "vanilla_distance_computations_per_query_mean": float(vanilla.get("distance_computations_per_query_mean", np.nan)),
+                    "ours_distance_computations_per_query_mean": float(ours.get("distance_computations_per_query_mean", np.nan)),
+                    "distance_computation_reduction_vs_vanilla_pct": (
+                        (1.0 - float(ours.get("distance_computations_per_query_mean", np.nan)) / float(vanilla.get("distance_computations_per_query_mean", np.nan))) * 100.0
+                        if float(vanilla.get("distance_computations_per_query_mean", np.nan)) > 0.0
+                        else np.nan
+                    ),
+                    "distance_computation_speedup_vs_vanilla": (
+                        float(vanilla.get("distance_computations_per_query_mean", np.nan)) / float(ours.get("distance_computations_per_query_mean", np.nan))
+                        if float(ours.get("distance_computations_per_query_mean", np.nan)) > 0.0
+                        else np.nan
+                    ),
+                    "vanilla_distance_computations_mean": float(vanilla.get("distance_computations_mean", np.nan)),
+                    "ours_distance_computations_mean": float(ours.get("distance_computations_mean", np.nan)),
+                }
+            )
+            print(
+                f"[GROUP] {stem} ef={int(ef)} {group_name} "
+                f"vanilla={vanilla_recall:.5f} ours={ours_recall:.5f} "
+                f"loss={recall_loss_pp:+.3f}pp speedup={pair_rows[-1]['latency_speedup_vs_vanilla']:.3f}x",
+                flush=True,
+            )
     sweep_df = pd.DataFrame(sweep_rows)
     pair_df = pd.DataFrame(pair_rows)
     sweep_df.to_csv(dataset_dir / f"{stem}__k{int(args.k)}__group_ef_sweep.csv", index=False)
@@ -661,9 +634,9 @@ def write_combined(args: argparse.Namespace, groups: list[pd.DataFrame], sweeps:
     if groups:
         pd.concat(groups, ignore_index=True).sort_values(["dataset", "k", "qid"]).to_csv(args.output_dir / "query_groups.csv", index=False)
     if sweeps:
-        pd.concat(sweeps, ignore_index=True).sort_values(["dataset", "k", "ef", "easiness_group", "hard_stagnation_enabled", "method"]).to_csv(args.output_dir / "group_ef_sweep.csv", index=False)
+        pd.concat(sweeps, ignore_index=True).sort_values(["dataset", "k", "ef", "easiness_group", "method"]).to_csv(args.output_dir / "group_ef_sweep.csv", index=False)
     if pairs:
-        pd.concat(pairs, ignore_index=True).sort_values(["dataset", "k", "ef", "easiness_group", "hard_stagnation_enabled"]).to_csv(args.output_dir / "group_pair_metrics.csv", index=False)
+        pd.concat(pairs, ignore_index=True).sort_values(["dataset", "k", "ef", "easiness_group"]).to_csv(args.output_dir / "group_pair_metrics.csv", index=False)
     write_readme(args.output_dir, args)
 
 

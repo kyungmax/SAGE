@@ -495,18 +495,30 @@ class Index {
         };
     }
 
-    // Keep CFR aggregation aligned with the shared Python/FAISS calibrator.
+    // Efficient offline-calibration summary: runs the same layer-0 trace search
+    // as searchLayer0PathHideNodeBatchWithMetrics, but aggregates the classify-
+    // window smoothed-CFR mean entirely in C++ (no per-step py::dict marshaling).
+    // Mirrors Faiss IndexHNSW::search_layer0_cfr_summary in name, signature and
+    // return keys so the shared calibrator can use one API across both backends.
+    // The trace path records pre-expansion runtime CFR/EMA, and this helper only
+    // aggregates the requested classify window.
     py::dict searchLayer0CfrSummary(
         py::object input,
         size_t k,
         size_t ef,
         py::object hide_labels = py::none(),
-        int num_threads = -1
+        int num_threads = -1,
+        int classify_start = 4,
+        int classify_end = 16,
+        float cfr_ema_decay = 0.8f
     ) {
-        static constexpr int CLASSIFY_START = 4;
-        static constexpr int CLASSIFY_END = 16;
-        static constexpr double CFR_EMA_DECAY = 0.8;
-        static constexpr double CFR_EMA_UPDATE = 1.0 - CFR_EMA_DECAY;
+        hnswlib::HierarchicalNSW<dist_t>::validateCfrWindowConfig(
+            classify_start,
+            classify_end,
+            cfr_ema_decay
+        );
+        const int CLASSIFY_START = classify_start;
+        const int CLASSIFY_END = classify_end;
 
         if (appr_alg->cur_element_count == 0) {
             throw std::runtime_error("Index is empty. Cannot perform search.");
@@ -550,35 +562,25 @@ class Index {
                 }
 
                 auto [steps, count, closest_dist] =
-                    appr_alg->searchKnnWithLayer0Trace(query_ptr, ef, k, hidden_internal_ids[row]);
+                    appr_alg->searchKnnWithLayer0Trace(
+                        query_ptr,
+                        ef,
+                        k,
+                        hidden_internal_ids[row],
+                        cfr_ema_decay
+                    );
 
-                double ema = std::numeric_limits<double>::quiet_NaN();
                 int observed_full_pop = 0;
                 int window_obs = 0;
                 double window_sum = 0.0;
                 for (const auto& s : steps) {
-                    if (s.result_set_size_after < ef) {
+                    if (!std::isfinite(s.runtime_smoothed_cfr)) {
                         continue;
                     }
                     observed_full_pop += 1;
-
-                    double popped = (double)s.popped_query_dist;
-                    double furthest = (double)s.furthest_dist;
-                    double cfr = std::numeric_limits<double>::quiet_NaN();
-                    if (std::isfinite(popped) && std::isfinite(furthest) &&
-                        std::fabs(furthest) > 1e-12) {
-                        cfr = std::fabs(popped) / std::fabs(furthest);
-                    }
-                    if (std::isfinite(cfr)) {
-                        if (std::isnan(ema)) {
-                            ema = cfr;
-                        } else {
-                            ema = CFR_EMA_DECAY * ema + CFR_EMA_UPDATE * cfr;
-                        }
-                    }
                     if (observed_full_pop >= CLASSIFY_START &&
-                        observed_full_pop <= CLASSIFY_END && std::isfinite(ema)) {
-                        window_sum += ema;
+                        observed_full_pop <= CLASSIFY_END) {
+                        window_sum += (double)s.runtime_smoothed_cfr;
                         window_obs += 1;
                     }
                     if (observed_full_pop >= CLASSIFY_END) {
@@ -610,6 +612,7 @@ class Index {
         out["closest_dists"] = closest_dists;
         return out;
     }
+
 
     py::object knnQueryAdaptiveAnalysis(
         py::object input,
@@ -2323,7 +2326,10 @@ Legacy experiment scripts may still call `knn_query_adaptive_light_paper_bucket`
             py::arg("k"),
             py::arg("ef"),
             py::arg("hide_labels") = py::none(),
-            py::arg("num_threads") = -1
+            py::arg("num_threads") = -1,
+            py::arg("classify_start") = 4,
+            py::arg("classify_end") = 16,
+            py::arg("cfr_ema_decay") = 0.8f
         )
         .def("get_items", &Index<float>::getData, py::arg("ids") = py::none(), py::arg("return_type") = "numpy")
         .def("get_ids_list", &Index<float>::getIdsList)

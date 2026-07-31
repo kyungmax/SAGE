@@ -53,6 +53,11 @@ else:
 TOPK = 10
 TMIN_POPS = 25
 PAPER_BUCKET_COUNT = 4
+DEFAULT_CLASSIFY_START = 4
+DEFAULT_CLASSIFY_END = 16
+DEFAULT_CFR_EMA_DECAY = 0.8
+CFR_OBSERVATION_MODE = "pre_expansion_frontier"
+HARD_STAG_ENABLED = False
 FIXED_LID_POOL_SIZE = 10000
 DEFAULT_EFS = [64, 80, 96, 128, 160, 192, 256, 320, 384, 512, 640, 768, 896, 1024]
 DEFAULT_RECOMMENDATION_EPS = 0.001
@@ -136,11 +141,17 @@ def index_path(index_dir: Path, name: str, args: argparse.Namespace) -> Path:
     return index_dir / f"{name}-M{int(args.degree)}-efC{int(args.ef_construction)}-hnsw-rabitq.index"
 
 
+def path_float_token(value: float) -> str:
+    return f"{float(value):g}".replace("-", "m").replace(".", "p")
+
+
 def artifact_stem(name: str, args: argparse.Namespace) -> str:
+    alpha = path_float_token(float(args.cfr_ema_decay))
     return (
         f"{name}-M{int(args.degree)}-efC{int(args.ef_construction)}-"
         f"adaptive-calibration-lid{int(args.lid_pool_size)}-probe{int(args.num_calibration_queries)}-s{int(args.calibration_seed)}-"
-        f"hide-node-paper-bucket-{int(args.calibration_threads)}thread"
+        f"hide-node-paper-bucket-cs{int(args.classify_start)}ce{int(args.classify_end)}-alpha{alpha}-nostag-"
+        f"{int(args.calibration_threads)}thread"
     )
 
 
@@ -562,6 +573,9 @@ def collect_cfr_hide(
     ef: int,
     topk: int,
     threads: int,
+    classify_start: int,
+    classify_end: int,
+    cfr_ema_decay: float,
 ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
     labels, _, stats = idx.search_adaptive_light_with_stats(
         vectors,
@@ -573,6 +587,9 @@ def collect_cfr_hide(
         tmin_pops=TMIN_POPS,
         ef_max=int(ef),
         hide_labels=np.asarray(ids, dtype=np.uint32),
+        classify_start=int(classify_start),
+        classify_end=int(classify_end),
+        cfr_ema_decay=float(cfr_ema_decay),
     )
     return np.asarray(labels, dtype=np.int64), {key: np.asarray(value) for key, value in stats.items()}
 
@@ -628,7 +645,17 @@ def build_policy(
     for ef in ef_values:
         routes = route_efs_for_paper_floor(ef, PAPER_BUCKET_COUNT)
         pair_targets = pair_targets_for_paper_floor(routes)
-        _, stats = collect_cfr_hide(idx, probe_vectors, probe_ids, ef, TOPK, int(args.calibration_threads))
+        _, stats = collect_cfr_hide(
+            idx,
+            probe_vectors,
+            probe_ids,
+            ef,
+            TOPK,
+            int(args.calibration_threads),
+            int(args.classify_start),
+            int(args.classify_end),
+            float(args.cfr_ema_decay),
+        )
         cfr_values = np.asarray(stats["classify_cfr_mean"], dtype=np.float32)
         usable = np.isfinite(cfr_values)
         cfr_cache[ef] = (cfr_values, usable)
@@ -653,6 +680,11 @@ def build_policy(
             "pair_target_efs": [int(value) for value in pair_targets],
             "target_acceptable_rates": [float(value) for value in acceptable_rates],
             "bucket_gamma_ratios": gammas,
+            "cfr_observation_mode": CFR_OBSERVATION_MODE,
+            "classify_start": int(args.classify_start),
+            "classify_end": int(args.classify_end),
+            "cfr_ema_decay": float(args.cfr_ema_decay),
+            "hard_stag_enabled": HARD_STAG_ENABLED,
             "super_easy_gamma_ratio": gammas[0] if gammas else float("nan"),
             "mid_easy_upper_gamma_ratio": gammas[1] if len(gammas) > 1 else float("nan"),
             "calibration_cfr_mean": float(np.mean(cfr_values[usable])),
@@ -707,6 +739,11 @@ def build_policy(
                 "calibration_lid_pool_count": int(lid_pool_count),
                 "usable_cfr_query_count": int(finite_cfr_values.size),
                 "cfr_metric": "classify_cfr_mean",
+                "cfr_observation_mode": CFR_OBSERVATION_MODE,
+                "classify_start": int(args.classify_start),
+                "classify_end": int(args.classify_end),
+                "cfr_ema_decay": float(args.cfr_ema_decay),
+                "hard_stag_enabled": HARD_STAG_ENABLED,
                 **finite_stats(finite_cfr_values),
                 "offline_num_threads": int(args.calibration_threads),
                 "mixed_threshold_mode": "paper_floor_half",
@@ -760,6 +797,11 @@ def build_policy(
                 "calibration_lid_pool_count": int(lid_pool_count),
                 "recommendation_source": "offline_calibration_proxy",
                 "calibration_probe_routing": "hide_node",
+                "cfr_observation_mode": CFR_OBSERVATION_MODE,
+                "classify_start": int(args.classify_start),
+                "classify_end": int(args.classify_end),
+                "cfr_ema_decay": float(args.cfr_ema_decay),
+                "hard_stag_enabled": HARD_STAG_ENABLED,
             }
         ]
     )
@@ -786,7 +828,7 @@ def policy_payload(
 ) -> dict:
     n, dim, dtype = train_meta(name, cfg)
     return {
-        "format": "rabitq-paper-source-lid-hide-node-adaptive-v1",
+        "format": "rabitq-paper-source-lid-hide-node-adaptive-v2",
         "dataset": name,
         "index_file": str(idx_path),
         "train_file": str(cfg.get("raw_i8bin") or cfg["h5"]),
@@ -798,6 +840,11 @@ def policy_payload(
         "efs": [int(value) for value in args.efs],
         "topk": TOPK,
         "tmin_pops": TMIN_POPS,
+        "hard_stag_enabled": HARD_STAG_ENABLED,
+        "cfr_observation_mode": CFR_OBSERVATION_MODE,
+        "classify_start": int(args.classify_start),
+        "classify_end": int(args.classify_end),
+        "cfr_ema_decay": float(args.cfr_ema_decay),
         "calibration_source": "lid_local_neighbor_train_probe_hide_node",
         "calibration_lid_source": "local_neighbor_distance_self_removed",
         "calibration_probe_routing": "hide_node",
@@ -930,13 +977,16 @@ def measure_one(
                 queries,
                 k=TOPK,
                 ef_init=int(ef),
-                enable_stop=True,
+                enable_stop=False,
                 num_threads=int(args.query_threads),
                 early_stop_ratio=float(p["tau"]),
                 tmin_pops=TMIN_POPS,
                 paper_bucket_mode=True,
                 paper_bucket_count=PAPER_BUCKET_COUNT,
                 bucket_gamma_ratios=[float(value) for value in p["bucket_gamma_ratios"]],
+                classify_start=int(p.get("classify_start", args.classify_start)),
+                classify_end=int(p.get("classify_end", args.classify_end)),
+                cfr_ema_decay=float(p.get("cfr_ema_decay", args.cfr_ema_decay)),
             )
         else:
             raise ValueError(f"Unsupported method={method!r}")
@@ -986,6 +1036,11 @@ def run_sweep(
                 "policy_path": str(policy_file) if method == "RaBitQ+SAGE" else "",
                 "calibration_probe_routing": "hide_node" if method == "RaBitQ+SAGE" else "",
                 "calibration_lid_source": "local_neighbor_distance_self_removed" if method == "RaBitQ+SAGE" else "",
+                "cfr_observation_mode": CFR_OBSERVATION_MODE if method == "RaBitQ+SAGE" else "",
+                "classify_start": int(args.classify_start) if method == "RaBitQ+SAGE" else "",
+                "classify_end": int(args.classify_end) if method == "RaBitQ+SAGE" else "",
+                "cfr_ema_decay": float(args.cfr_ema_decay) if method == "RaBitQ+SAGE" else "",
+                "hard_stag_enabled": HARD_STAG_ENABLED if method == "RaBitQ+SAGE" else "",
             }
             rows.append(row)
             print(f"{name},{method},ef={ef},recall={recall:.6f},qps={qps:.2f}", flush=True)
@@ -1012,6 +1067,11 @@ def write_sweep_csv(path: Path, rows: list[dict[str, object]]) -> None:
         "policy_path",
         "calibration_probe_routing",
         "calibration_lid_source",
+        "cfr_observation_mode",
+        "classify_start",
+        "classify_end",
+        "cfr_ema_decay",
+        "hard_stag_enabled",
     ]
     with path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -1063,6 +1123,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lid-ef", type=int, default=4096)
     parser.add_argument("--gt-ef", type=int, default=4096)
     parser.add_argument("--acceptable-recall", type=float, default=1.0)
+    parser.add_argument("--classify-start", type=int, default=DEFAULT_CLASSIFY_START)
+    parser.add_argument("--classify-end", type=int, default=DEFAULT_CLASSIFY_END)
+    parser.add_argument("--cfr-ema-decay", type=float, default=DEFAULT_CFR_EMA_DECAY)
     parser.add_argument("--recommendation-eps", type=float, default=DEFAULT_RECOMMENDATION_EPS)
     parser.add_argument("--calibration-seed", type=int, default=42)
     parser.add_argument("--query-key", default="test")
@@ -1082,6 +1145,16 @@ def parse_args() -> argparse.Namespace:
         raise ValueError("--internal-lid-k must be at least 2.")
     if float(args.trim_low_percentile) >= float(args.trim_high_percentile):
         raise ValueError("--trim-low-percentile must be smaller than --trim-high-percentile.")
+    if int(args.classify_start) < 0:
+        raise ValueError("--classify-start must be >= 0.")
+    if int(args.classify_end) < 1:
+        raise ValueError("--classify-end must be >= 1.")
+    if int(args.classify_end) < int(args.classify_start):
+        raise ValueError("--classify-end must be >= --classify-start.")
+    if int(args.classify_end) - int(args.classify_start) + 1 > 13:
+        raise ValueError("RaBitQ adaptive stats currently supports CFR windows of at most 13 observations.")
+    if not np.isfinite(float(args.cfr_ema_decay)) or not (0.0 <= float(args.cfr_ema_decay) <= 1.0):
+        raise ValueError("--cfr-ema-decay must lie in [0, 1].")
     configure_dataset_paths(Path(args.data_dir), Path(args.msspacev_raw))
     return args
 

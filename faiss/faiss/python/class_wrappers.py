@@ -972,8 +972,11 @@ def handle_Index(the_class):
         mean_smoothed_cfrs = np.full(n, np.nan, dtype=np.float32)
         closest_dists = np.full(n, np.inf, dtype=np.float32)
 
-        params = faiss.SearchParametersHNSW()
+        params = faiss.SearchParametersHNSWAdaptiveLight()
         params.efSearch = int(ef)
+        params.classify_start = int(classify_start)
+        params.classify_end = int(classify_end)
+        params.cfr_ema_decay = float(cfr_ema_decay)
         params.sel = selector
 
         prev_num_threads = None

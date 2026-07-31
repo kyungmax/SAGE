@@ -65,7 +65,7 @@ CELLS: tuple[Cell, ...] = (
     Cell("ncal", "01_ncal", "ncal_100", "ncal", "100", ncal=100),
     Cell("ncal", "01_ncal", "ncal_500", "ncal", "500", ncal=500),
     Cell("ncal", "01_ncal", "ncal_1000", "ncal", "1000", ncal=1000),
-    Cell("window", "02_classification_window", "window_0_12", "classification_window", "0_12", classify_start=0, classify_end=12),
+    Cell("window", "02_classification_window", "window_1_13", "classification_window", "1_13", classify_start=1, classify_end=13),
     Cell("window", "02_classification_window", "window_4_16", "classification_window", "4_16", classify_start=4, classify_end=16),
     Cell("tiers", "03_tiers", "b2", "tiers", "2", bucket_count=2),
     Cell("tiers", "03_tiers", "b4", "tiers", "4", bucket_count=4),

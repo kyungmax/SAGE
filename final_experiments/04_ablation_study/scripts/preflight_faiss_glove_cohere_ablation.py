@@ -10,6 +10,8 @@ from typing import Sequence
 
 import h5py
 
+SCRIPT_PATH = Path(__file__).resolve()
+REPO_ROOT = SCRIPT_PATH.parents[3]
 DEFAULT_PROJECT_ROOT = Path(
     os.environ.get("HNSW_PLAYGROUND_ROOT", os.environ.get("SAGE_PROJECT_ROOT", str(REPO_ROOT)))
 ).expanduser()

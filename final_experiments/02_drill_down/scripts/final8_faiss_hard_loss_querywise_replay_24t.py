@@ -94,7 +94,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--classify-start", type=int, default=4)
     parser.add_argument("--classify-end", type=int, default=16)
     parser.add_argument("--cfr-ema-decay", type=float, default=0.8)
-    parser.add_argument("--hard-stagnation-count", type=int, default=20)
     args = parser.parse_args()
     args.datasets = tuple(part.strip() for part in str(args.datasets).split(",") if part.strip())
     args.efs = tuple(int(part.strip()) for part in str(args.efs).split(",") if part.strip())
@@ -185,7 +184,6 @@ def sage_labels(
     classify_start: int,
     classify_end: int,
     cfr_ema_decay: float,
-    hard_stagnation_count: int,
     num_threads: int,
     batch_size: int,
 ) -> np.ndarray:
@@ -344,15 +342,15 @@ def attach_stop_vs_nostop(index: Any, rows: pd.DataFrame, queries: np.ndarray, e
     local["analysis_stop_recall"] = stop_recall
     local["analysis_pop_steps"] = stop_steps
     local["analysis_distance_computations"] = stop_distances
-    local["hard_stagnation_stop_flag"] = stop_flags
-    local["hard_stagnation_fired"] = stop_flags > 0
+    local["adaptive_stop_flag"] = stop_flags
+    local["adaptive_stop_fired"] = stop_flags > 0
     local["nostop_recall"] = nostop_recall
     local["nostop_pop_steps"] = nostop_steps
     local["nostop_distance_computations"] = nostop_distances
     local["loss_vs_nostop"] = np.maximum(local["nostop_recall"].astype(float) - local["analysis_stop_recall"].astype(float), 0.0)
     local["saved_steps_vs_nostop"] = local["nostop_pop_steps"].astype(int) - local["analysis_pop_steps"].astype(int)
     local["saved_distance_computations_vs_nostop"] = local["nostop_distance_computations"].astype(int) - local["analysis_distance_computations"].astype(int)
-    local["hard_stagnation_loss"] = local["loss_vs_nostop"].astype(float) > 1e-12
+    local["adaptive_stop_loss"] = local["loss_vs_nostop"].astype(float) > 1e-12
     return local
 
 
@@ -362,7 +360,7 @@ def summarize(per_query: pd.DataFrame) -> pd.DataFrame:
         loss = part[part["hard_positive_loss"].astype(float) > 1e-12]
         fe = part[part["false_easy_loss"].astype(bool)]
         full = part[part["full_route_loss"].astype(bool)]
-        stag = part[part.get("hard_stagnation_loss", False).fillna(False).astype(bool)] if "hard_stagnation_loss" in part else part.iloc[0:0]
+        stag = part[part.get("adaptive_stop_loss", False).fillna(False).astype(bool)] if "adaptive_stop_loss" in part else part.iloc[0:0]
         total_loss_sum = float(loss["hard_positive_loss"].sum())
         fe_loss_sum = float(fe["hard_positive_loss"].sum())
         full_loss_sum = float(full["hard_positive_loss"].sum())
@@ -375,7 +373,7 @@ def summarize(per_query: pd.DataFrame) -> pd.DataFrame:
                 "hard_positive_loss_q": int(len(loss)),
                 "false_easy_loss_q": int(len(fe)),
                 "full_route_loss_q": int(len(full)),
-                "hard_stagnation_loss_q": int(len(stag)),
+                "adaptive_stop_loss_q": int(len(stag)),
                 "hard_vanilla_recall_mean": float(part["vanilla_recall"].mean()),
                 "hard_exact_ours_recall_mean": float(part["exact_ours_recall"].mean()),
                 "hard_net_drop_mean": float((part["vanilla_recall"].astype(float) - part["exact_ours_recall"].astype(float)).mean()),
@@ -383,10 +381,10 @@ def summarize(per_query: pd.DataFrame) -> pd.DataFrame:
                 "hard_positive_drop_sum": total_loss_sum,
                 "false_easy_drop_sum": fe_loss_sum,
                 "full_route_drop_sum": full_loss_sum,
-                "hard_stagnation_loss_vs_nostop_sum": stag_loss_sum,
+                "adaptive_stop_loss_vs_nostop_sum": stag_loss_sum,
                 "false_easy_share_of_positive_drop": fe_loss_sum / total_loss_sum if total_loss_sum > 0 else np.nan,
                 "full_route_share_of_positive_drop": full_loss_sum / total_loss_sum if total_loss_sum > 0 else np.nan,
-                "hard_stagnation_vs_nostop_share_of_positive_drop": stag_loss_sum / total_loss_sum if total_loss_sum > 0 else np.nan,
+                "adaptive_stop_vs_nostop_share_of_positive_drop": stag_loss_sum / total_loss_sum if total_loss_sum > 0 else np.nan,
             }
         )
     return pd.DataFrame(rows)
@@ -456,7 +454,6 @@ def run_dataset_ef(dataset: str, ef: int, qgroups: pd.DataFrame, args: argparse.
         classify_start=int(args.classify_start),
         classify_end=int(args.classify_end),
         cfr_ema_decay=float(args.cfr_ema_decay),
-        hard_stagnation_count=int(args.hard_stagnation_count),
         num_threads=int(args.num_threads),
         batch_size=int(args.batch_size),
     )
@@ -488,12 +485,12 @@ def run_dataset_ef(dataset: str, ef: int, qgroups: pd.DataFrame, args: argparse.
 
     full_loss = out[out["full_route_loss"].astype(bool)].copy()
     if not full_loss.empty and hasattr(index, "knn_query_adaptive_analysis_paper_bucket"):
-        print(f"[STAG] {stem} ef={ef} full_route_loss_q={len(full_loss)}", flush=True)
+        print(f"[STOP] {stem} ef={ef} full_route_loss_q={len(full_loss)}", flush=True)
         stag = attach_stop_vs_nostop(index, full_loss, queries, eval_gt, ef=int(ef), k=int(args.k), tau=float(tau), gammas=gammas, args=args)
         cols = [col for col in stag.columns if col not in out.columns or col in {"dataset", "qid", "ef"}]
         out = out.merge(stag[["dataset", "qid", "ef"] + [col for col in cols if col not in {"dataset", "qid", "ef"}]], on=["dataset", "qid", "ef"], how="left")
     else:
-        out["hard_stagnation_loss"] = False
+        out["adaptive_stop_loss"] = False
 
     print(f"[DONE] {stem} ef={ef} hard_q={len(out)} elapsed={time.time() - started:.1f}s", flush=True)
     return out
@@ -523,7 +520,7 @@ def main() -> int:
         f"Backend: {str(args.backend)}. "
         "Hard group is read from the new exact-GT/groupDef1024 drilldown query groups. "
         "False-easy loss means exact Ours has positive hard-group recall loss and the CFR route is below the selected efSearch. "
-        "Hard-stagnation loss is measured on full-route loss rows by comparing adaptive stop against the same analysis path with stop disabled.\n",
+        "Adaptive stop loss is measured on full-route loss rows by comparing adaptive stop against the same analysis path with stop disabled.\n",
         encoding="utf-8",
     )
     print(f"[RESULT] {output_dir}", flush=True)

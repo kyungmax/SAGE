@@ -19,7 +19,7 @@ Paper ablation cells:
 | Study | Values |
 |-------|--------|
 | `01_ncal` | `100`, `500`, `1000` |
-| `02_classification_window` | `[0,12]`, `[4,16]` |
+| `02_classification_window` | `[1,13]`, `[4,16]` |
 | `03_tiers` | `B=2`, `B=4`, `B=6` |
 | `04_ema_alpha` | `alpha=0.0`, `alpha=0.4`, `alpha=0.8` |
 | `05_pair_gap` | `g=1`, `g=2`, `g=3`, `g=4` |

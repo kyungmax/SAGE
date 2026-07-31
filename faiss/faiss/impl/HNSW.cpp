@@ -1050,6 +1050,113 @@ int search_from_candidates_adaptive_light(
         candidates.push(idx, dis);
     };
 
+    auto observe_cfr_full_pop =
+            [&](const float candidate_dist,
+                const float cfr_denominator_dist) {
+        full_pop_count++;
+        const float candidate_dist_external =
+                raw_distance_to_external_distance(
+                        candidate_dist,
+                        similarity_metric);
+        const float cfr = candidate_dist_external /
+                std::max(cfr_denominator_dist, 1e-6f);
+
+        if (std::isnan(smoothed_cfr_ema)) {
+            smoothed_cfr_ema = cfr;
+        } else {
+            smoothed_cfr_ema =
+                    cfr_ema_decay * smoothed_cfr_ema +
+                    cfr_ema_update * cfr;
+        }
+
+        if (full_pop_count >= classify_start &&
+            full_pop_count <= classify_end) {
+            classify_smoothed_cfr_sum += smoothed_cfr_ema;
+            classify_smoothed_cfr_count++;
+
+            if (!classification_evaluated &&
+                full_pop_count == classify_end) {
+                classification_evaluated = true;
+                if (direct_classifier_threshold_enabled) {
+                    classify_cfr_mean = classify_smoothed_cfr_sum /
+                            static_cast<float>(classify_smoothed_cfr_count);
+                    is_easy_query =
+                            classify_cfr_mean <= params.early_stop_ratio;
+                    if (is_easy_query) {
+                        const float classify_cfr_ratio =
+                                classify_cfr_mean /
+                                std::max(params.early_stop_ratio, 1e-6f);
+                        if (super_easy_policy_enabled) {
+                            is_super_easy_query =
+                                    classify_cfr_ratio <=
+                                    params.super_easy_gamma_ratio;
+                        }
+                        if (mid_easy_bucket_policy_enabled) {
+                            is_mid_easy_query =
+                                    classify_cfr_ratio <=
+                                    params.mid_easy_upper_gamma_ratio;
+                        }
+                    }
+                }
+
+                if (!effective_ef_shrink_applied) {
+                    size_t shrunk_ef_cur = configured_ef_cur;
+                    if (params.paper_bucket_mode) {
+                        if (is_easy_query) {
+                            const float classify_cfr_ratio =
+                                    classify_cfr_mean /
+                                    std::max(params.early_stop_ratio, 1e-6f);
+                            shrunk_ef_cur = resolve_paper_bucket_shrink_ef(
+                                    configured_ef_cur,
+                                    static_cast<size_t>(k_search),
+                                    params,
+                                    classify_cfr_ratio);
+                        }
+                    } else {
+                        const size_t shrink_super_easy_ef =
+                                resolve_scaled_shrink_ef(
+                                        configured_ef_cur,
+                                        0.25,
+                                        128);
+                        const size_t shrink_easy_ef =
+                                std::max<size_t>(1, configured_ef_cur / 2);
+                        const size_t shrink_mid_easy_ef =
+                                resolve_scaled_shrink_ef(
+                                        configured_ef_cur,
+                                        0.50,
+                                        128);
+                        const size_t shrink_edge_easy_ef =
+                                resolve_scaled_shrink_ef(
+                                        configured_ef_cur,
+                                        0.75,
+                                        256);
+
+                        if (super_easy_policy_enabled && is_super_easy_query) {
+                            shrunk_ef_cur = shrink_super_easy_ef;
+                        } else if (is_easy_query) {
+                            if (mid_easy_bucket_policy_enabled) {
+                                shrunk_ef_cur = is_mid_easy_query
+                                        ? shrink_mid_easy_ef
+                                        : shrink_edge_easy_ef;
+                            } else {
+                                shrunk_ef_cur = shrink_easy_ef;
+                            }
+                        }
+                        shrunk_ef_cur = std::max<size_t>(
+                                shrunk_ef_cur,
+                                static_cast<size_t>(k_search));
+                    }
+
+                    if (shrunk_ef_cur < ef_cur) {
+                        ef_cur = shrunk_ef_cur;
+                        shrink_minimax_heap_capacity(candidates, ef_cur);
+                    }
+                    effective_ef_shrink_applied = true;
+                }
+            }
+        }
+    };
+
     while (candidates.size() > 0) {
         float candidate_dist = 0.0f;
         storage_idx_t current = candidates.pop_min(&candidate_dist);
@@ -1060,6 +1167,16 @@ int search_from_candidates_adaptive_light(
         if (candidates.count_below(candidate_dist) >=
             static_cast<int>(ef_cur)) {
             break;
+        }
+
+        const bool pre_expansion_full =
+                candidates.k >= static_cast<int>(ef_cur);
+        const float pre_expansion_frontier_dist = pre_expansion_full
+                ? raw_distance_to_external_distance(
+                          candidates.max(), similarity_metric)
+                : std::numeric_limits<float>::quiet_NaN();
+        if (pre_expansion_full) {
+            observe_cfr_full_pop(candidate_dist, pre_expansion_frontier_dist);
         }
 
         size_t begin, end;
@@ -1108,119 +1225,6 @@ int search_from_candidates_adaptive_light(
             float dis = qdis(saved_j[icnt]);
             add_to_heap(saved_j[icnt], dis);
             ndis += 1;
-        }
-
-        if (candidates.k >= static_cast<int>(ef_cur)) {
-            full_pop_count++;
-            float furthest_dist = raw_distance_to_external_distance(
-                    candidates.max(), similarity_metric);
-            const float candidate_dist_external =
-                    raw_distance_to_external_distance(
-                            candidate_dist,
-                            similarity_metric);
-            const float cfr =
-                    candidate_dist_external / std::max(furthest_dist, 1e-6f);
-            if (std::isnan(smoothed_cfr_ema)) {
-                smoothed_cfr_ema = cfr;
-            } else {
-                smoothed_cfr_ema =
-                        cfr_ema_decay * smoothed_cfr_ema +
-                        cfr_ema_update * cfr;
-            }
-
-            if (full_pop_count >= classify_start &&
-                full_pop_count <= classify_end) {
-                classify_smoothed_cfr_sum += smoothed_cfr_ema;
-                classify_smoothed_cfr_count++;
-
-                if (!classification_evaluated &&
-                    full_pop_count == classify_end) {
-                    classification_evaluated = true;
-                    if (direct_classifier_threshold_enabled) {
-                        classify_cfr_mean = classify_smoothed_cfr_sum /
-                                static_cast<float>(classify_smoothed_cfr_count);
-                        is_easy_query =
-                                classify_cfr_mean <= params.early_stop_ratio;
-                        if (is_easy_query) {
-                            const float classify_cfr_ratio =
-                                    classify_cfr_mean /
-                                    std::max(params.early_stop_ratio, 1e-6f);
-                            if (super_easy_policy_enabled) {
-                                is_super_easy_query =
-                                        classify_cfr_ratio <=
-                                        params.super_easy_gamma_ratio;
-                            }
-                            if (mid_easy_bucket_policy_enabled) {
-                                is_mid_easy_query =
-                                        classify_cfr_ratio <=
-                                        params.mid_easy_upper_gamma_ratio;
-                            }
-                        }
-                    }
-
-                    if (!effective_ef_shrink_applied) {
-                        size_t shrunk_ef_cur = configured_ef_cur;
-                        if (params.paper_bucket_mode) {
-                            if (is_easy_query) {
-                                const float classify_cfr_ratio =
-                                        classify_cfr_mean /
-                                        std::max(params.early_stop_ratio, 1e-6f);
-                                shrunk_ef_cur = resolve_paper_bucket_shrink_ef(
-                                        configured_ef_cur,
-                                        static_cast<size_t>(k_search),
-                                        params,
-                                        classify_cfr_ratio);
-                            }
-                        } else {
-                            const size_t shrink_super_easy_ef =
-                                    resolve_scaled_shrink_ef(
-                                            configured_ef_cur,
-                                            0.25,
-                                            128);
-                            const size_t shrink_easy_ef =
-                                    std::max<size_t>(1, configured_ef_cur / 2);
-                            const size_t shrink_mid_easy_ef =
-                                    resolve_scaled_shrink_ef(
-                                            configured_ef_cur,
-                                            0.50,
-                                            128);
-                            const size_t shrink_edge_easy_ef =
-                                    resolve_scaled_shrink_ef(
-                                            configured_ef_cur,
-                                            0.75,
-                                            256);
-
-                            if (super_easy_policy_enabled && is_super_easy_query) {
-                                shrunk_ef_cur = shrink_super_easy_ef;
-                            } else if (is_easy_query) {
-                                if (mid_easy_bucket_policy_enabled) {
-                                    shrunk_ef_cur = is_mid_easy_query
-                                            ? shrink_mid_easy_ef
-                                            : shrink_edge_easy_ef;
-                                } else {
-                                    shrunk_ef_cur = shrink_easy_ef;
-                                }
-                            }
-                            shrunk_ef_cur = std::max<size_t>(
-                                    shrunk_ef_cur,
-                                    static_cast<size_t>(k_search));
-                        }
-
-                        if (shrunk_ef_cur < ef_cur) {
-                            ef_cur = shrunk_ef_cur;
-                            shrink_minimax_heap_capacity(candidates, ef_cur);
-                            if (candidates.k > 0) {
-                                furthest_dist =
-                                        raw_distance_to_external_distance(
-                                                candidates.max(),
-                                                similarity_metric);
-                            }
-                        }
-                        effective_ef_shrink_applied = true;
-                    }
-                }
-            }
-
         }
 
         nstep++;

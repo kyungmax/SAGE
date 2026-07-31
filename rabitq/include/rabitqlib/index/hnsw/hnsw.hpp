@@ -45,6 +45,9 @@ struct AdaptiveLightConfig {
     float early_stop_ratio = 0.6F;
     float super_easy_gamma_ratio = std::numeric_limits<float>::quiet_NaN();
     float mid_easy_upper_gamma_ratio = std::numeric_limits<float>::quiet_NaN();
+    int classify_start = 4;
+    int classify_end = 16;
+    float cfr_ema_decay = 0.8F;
     bool paper_bucket_mode = false;
     int paper_bucket_count = 4;
     std::array<float, 7> bucket_gamma_ratios = {
@@ -1715,11 +1718,28 @@ void HierarchicalNSW::searchBaseLayerST_AdaptiveRerankOpt(
     // Use our bounded priority queue instead of the maxheap.
     buffer::SearchBuffer<float> candidate_set(effective_ef);
 
-    static constexpr size_t kHardOnlyStagLimit = 20;
-    static constexpr int kClassifyStart = 4;
-    static constexpr int kClassifyEnd = 16;
-    static constexpr float kCfrEmaDecay = 0.8F;
-    static constexpr float kCfrEmaUpdate = 1.0F - kCfrEmaDecay;
+    const int classify_start = adaptive_enabled
+                                   ? adaptive_config->classify_start
+                                   : AdaptiveLightStats::kClassifyTraceStart;
+    const int classify_end = adaptive_enabled
+                                 ? adaptive_config->classify_end
+                                 : AdaptiveLightStats::kClassifyTraceEnd;
+    const float cfr_ema_decay = adaptive_enabled ? adaptive_config->cfr_ema_decay : 0.8F;
+    const float cfr_ema_update = 1.0F - cfr_ema_decay;
+    if (adaptive_enabled) {
+        if (classify_start < 0) {
+            throw std::runtime_error("classify_start must be >= 0");
+        }
+        if (classify_end < classify_start || classify_end < 1) {
+            throw std::runtime_error("classify_end must be >= max(classify_start, 1)");
+        }
+        if (classify_end - classify_start + 1 > AdaptiveLightStats::kClassifyTraceLen) {
+            throw std::runtime_error("classify window exceeds adaptive stats trace capacity");
+        }
+        if (!std::isfinite(cfr_ema_decay) || cfr_ema_decay < 0.0F || cfr_ema_decay > 1.0F) {
+            throw std::runtime_error("cfr_ema_decay must be finite and lie in [0, 1]");
+        }
+    }
 
     bool is_easy_query = false;
     bool is_super_easy_query = false;
@@ -1729,8 +1749,6 @@ void HierarchicalNSW::searchBaseLayerST_AdaptiveRerankOpt(
     bool ef_was_shrunk = false;
     bool early_stopped = false;
     int full_pop_count = 0;
-    int stagnation_count = 0;
-    float prev_furthest = std::numeric_limits<float>::max();
     float smoothed_cfr_ema = std::numeric_limits<float>::quiet_NaN();
     float classify_smoothed_cfr_sum = 0.0F;
     int classify_smoothed_cfr_count = 0;
@@ -1743,9 +1761,6 @@ void HierarchicalNSW::searchBaseLayerST_AdaptiveRerankOpt(
     const bool mid_easy_bucket_policy_enabled =
         direct_classifier_threshold_enabled && !adaptive_config->paper_bucket_mode &&
         std::isfinite(adaptive_config->mid_easy_upper_gamma_ratio);
-    const int effective_tmin_pops = direct_classifier_threshold_enabled
-                                        ? std::max(adaptive_config->tmin_pops, kClassifyEnd)
-                                        : 0;
 
     float distk = 1e10;
 
@@ -1782,6 +1797,112 @@ void HierarchicalNSW::searchBaseLayerST_AdaptiveRerankOpt(
     const size_t prefetch_size = (((padded_dim_ / 8) + 63) / 64) + 1;
     const size_t prefetch_lookahead = 4;  // Number of neighbors to prefetch in advance.
 
+    auto observe_pre_expansion_cfr = [&](float current_candidate_dist) {
+        if (!adaptive_enabled || !candidate_set.is_full()) {
+            return;
+        }
+
+        full_pop_count++;
+        const float furthest_dist = adaptive_light_ratio_distance(
+            candidate_set.top_dist(), metric_type_
+        );
+        const float current_dist_for_ratio = adaptive_light_ratio_distance(
+            current_candidate_dist, metric_type_
+        );
+        const float cfr =
+            current_dist_for_ratio / std::max(furthest_dist, 1e-6F);
+
+        if (std::isnan(smoothed_cfr_ema)) {
+            smoothed_cfr_ema = cfr;
+        } else {
+            smoothed_cfr_ema =
+                cfr_ema_decay * smoothed_cfr_ema + cfr_ema_update * cfr;
+        }
+
+        if (full_pop_count >= classify_start && full_pop_count <= classify_end) {
+            if (adaptive_stats != nullptr) {
+                const int trace_idx = full_pop_count - classify_start;
+                adaptive_stats->classify_popped_dist[static_cast<size_t>(trace_idx)] =
+                    current_dist_for_ratio;
+                adaptive_stats->classify_furthest_dist[static_cast<size_t>(trace_idx)] =
+                    furthest_dist;
+                adaptive_stats->classify_cfr[static_cast<size_t>(trace_idx)] = cfr;
+                adaptive_stats->classify_smoothed_cfr[static_cast<size_t>(trace_idx)] =
+                    smoothed_cfr_ema;
+            }
+            classify_smoothed_cfr_sum += smoothed_cfr_ema;
+            classify_smoothed_cfr_count++;
+
+            if (!classification_evaluated && full_pop_count == classify_end) {
+                classification_evaluated = true;
+                if (direct_classifier_threshold_enabled) {
+                    classify_cfr_mean = classify_smoothed_cfr_sum /
+                                        static_cast<float>(classify_smoothed_cfr_count);
+                    is_easy_query =
+                        classify_cfr_mean <= adaptive_config->early_stop_ratio;
+                    if (is_easy_query) {
+                        const float classify_cfr_ratio =
+                            classify_cfr_mean /
+                            std::max(adaptive_config->early_stop_ratio, 1e-6F);
+                        if (super_easy_policy_enabled) {
+                            is_super_easy_query = classify_cfr_ratio <=
+                                                  adaptive_config->super_easy_gamma_ratio;
+                        }
+                        if (mid_easy_bucket_policy_enabled) {
+                            is_mid_easy_query = classify_cfr_ratio <=
+                                                adaptive_config->mid_easy_upper_gamma_ratio;
+                        }
+                    }
+                }
+
+                if (!effective_ef_shrink_applied) {
+                    size_t shrunk_ef = configured_ef;
+                    if (adaptive_config->paper_bucket_mode) {
+                        if (is_easy_query) {
+                            const float classify_cfr_ratio =
+                                classify_cfr_mean /
+                                std::max(adaptive_config->early_stop_ratio, 1e-6F);
+                            const size_t selected_bucket_index =
+                                resolve_adaptive_bucket_index(*adaptive_config, classify_cfr_ratio);
+                            is_super_easy_query = selected_bucket_index == 0;
+                            is_mid_easy_query = selected_bucket_index <= 1;
+                            shrunk_ef = resolve_adaptive_bucket_ef(
+                                configured_ef, TOPK, *adaptive_config, classify_cfr_ratio
+                            );
+                        }
+                    } else {
+                        const size_t shrink_super_easy_ef =
+                            resolve_adaptive_scaled_ef(configured_ef, 0.25, 1, TOPK);
+                        const size_t shrink_easy_ef =
+                            std::max<size_t>(TOPK, configured_ef / 2);
+                        const size_t shrink_mid_easy_ef =
+                            resolve_adaptive_scaled_ef(configured_ef, 0.50, 1, TOPK);
+                        const size_t shrink_edge_easy_ef =
+                            resolve_adaptive_scaled_ef(configured_ef, 0.75, 1, TOPK);
+
+                        if (super_easy_policy_enabled && is_super_easy_query) {
+                            shrunk_ef = shrink_super_easy_ef;
+                        } else if (is_easy_query) {
+                            if (mid_easy_bucket_policy_enabled) {
+                                shrunk_ef = is_mid_easy_query ? shrink_mid_easy_ef
+                                                              : shrink_edge_easy_ef;
+                            } else {
+                                shrunk_ef = shrink_easy_ef;
+                            }
+                        }
+                    }
+
+                    if (shrunk_ef < effective_ef) {
+                        effective_ef = shrunk_ef;
+                        ef_was_shrunk = true;
+                        candidate_set.shrink_capacity(effective_ef);
+                    }
+                    effective_ef_shrink_applied = true;
+                }
+            }
+        }
+    };
+
     while (candidate_set.has_next()) {
         // Step 1 - get the next node to explore.
         const float current_candidate_dist = candidate_set.next_dist();
@@ -1789,6 +1910,7 @@ void HierarchicalNSW::searchBaseLayerST_AdaptiveRerankOpt(
         if (adaptive_stats != nullptr) {
             adaptive_stats->base_pop_count++;
         }
+        observe_pre_expansion_cfr(current_candidate_dist);
         int* data = (int*)get_linklist0(current_node_id);
         size_t size = get_list_count((PID*)data);
         if (adaptive_stats != nullptr) {
@@ -1866,141 +1988,6 @@ void HierarchicalNSW::searchBaseLayerST_AdaptiveRerankOpt(
             }
         }
 
-        bool stop_search = false;
-        if (adaptive_enabled && candidate_set.is_full()) {
-            full_pop_count++;
-            float furthest_dist = adaptive_light_ratio_distance(
-                candidate_set.top_dist(), metric_type_
-            );
-            const float current_dist_for_ratio = adaptive_light_ratio_distance(
-                current_candidate_dist, metric_type_
-            );
-            const float cfr =
-                current_dist_for_ratio / std::max(furthest_dist, 1e-6F);
-            bool rebased_after_shrink = false;
-
-            if (std::isnan(smoothed_cfr_ema)) {
-                smoothed_cfr_ema = cfr;
-            } else {
-                smoothed_cfr_ema =
-                    kCfrEmaDecay * smoothed_cfr_ema + kCfrEmaUpdate * cfr;
-            }
-
-            if (full_pop_count >= kClassifyStart && full_pop_count <= kClassifyEnd) {
-                if (adaptive_stats != nullptr) {
-                    const int trace_idx = full_pop_count - kClassifyStart;
-                    adaptive_stats->classify_popped_dist[static_cast<size_t>(trace_idx)] =
-                        current_dist_for_ratio;
-                    adaptive_stats->classify_furthest_dist[static_cast<size_t>(trace_idx)] =
-                        furthest_dist;
-                    adaptive_stats->classify_cfr[static_cast<size_t>(trace_idx)] = cfr;
-                    adaptive_stats->classify_smoothed_cfr[static_cast<size_t>(trace_idx)] =
-                        smoothed_cfr_ema;
-                }
-                classify_smoothed_cfr_sum += smoothed_cfr_ema;
-                classify_smoothed_cfr_count++;
-
-                if (!classification_evaluated && full_pop_count == kClassifyEnd) {
-                    classification_evaluated = true;
-                    if (direct_classifier_threshold_enabled) {
-                        classify_cfr_mean = classify_smoothed_cfr_sum /
-                                            static_cast<float>(classify_smoothed_cfr_count);
-                        is_easy_query =
-                            classify_cfr_mean <= adaptive_config->early_stop_ratio;
-                        if (is_easy_query) {
-                            const float classify_cfr_ratio =
-                                classify_cfr_mean /
-                                std::max(adaptive_config->early_stop_ratio, 1e-6F);
-                            if (super_easy_policy_enabled) {
-                                is_super_easy_query = classify_cfr_ratio <=
-                                                      adaptive_config->super_easy_gamma_ratio;
-                            }
-                            if (mid_easy_bucket_policy_enabled) {
-                                is_mid_easy_query = classify_cfr_ratio <=
-                                                    adaptive_config->mid_easy_upper_gamma_ratio;
-                            }
-                        }
-                    }
-
-                    if (!effective_ef_shrink_applied) {
-                        size_t shrunk_ef = configured_ef;
-                        if (adaptive_config->paper_bucket_mode) {
-                            if (is_easy_query) {
-                                const float classify_cfr_ratio =
-                                    classify_cfr_mean /
-                                    std::max(adaptive_config->early_stop_ratio, 1e-6F);
-                                const size_t selected_bucket_index =
-                                    resolve_adaptive_bucket_index(*adaptive_config, classify_cfr_ratio);
-                                is_super_easy_query = selected_bucket_index == 0;
-                                is_mid_easy_query = selected_bucket_index <= 1;
-                                shrunk_ef = resolve_adaptive_bucket_ef(
-                                    configured_ef, TOPK, *adaptive_config, classify_cfr_ratio
-                                );
-                            }
-                        } else {
-                            const size_t shrink_super_easy_ef =
-                                resolve_adaptive_scaled_ef(configured_ef, 0.25, 1, TOPK);
-                            const size_t shrink_easy_ef =
-                                std::max<size_t>(TOPK, configured_ef / 2);
-                            const size_t shrink_mid_easy_ef =
-                                resolve_adaptive_scaled_ef(configured_ef, 0.50, 1, TOPK);
-                            const size_t shrink_edge_easy_ef =
-                                resolve_adaptive_scaled_ef(configured_ef, 0.75, 1, TOPK);
-
-                            if (super_easy_policy_enabled && is_super_easy_query) {
-                                shrunk_ef = shrink_super_easy_ef;
-                            } else if (is_easy_query) {
-                                if (mid_easy_bucket_policy_enabled) {
-                                    shrunk_ef = is_mid_easy_query ? shrink_mid_easy_ef
-                                                                  : shrink_edge_easy_ef;
-                                } else {
-                                    shrunk_ef = shrink_easy_ef;
-                                }
-                            }
-                        }
-
-                        if (shrunk_ef < effective_ef) {
-                            effective_ef = shrunk_ef;
-                            ef_was_shrunk = true;
-                            candidate_set.shrink_capacity(effective_ef);
-                            if (candidate_set.is_full()) {
-                                furthest_dist = adaptive_light_ratio_distance(
-                                    candidate_set.top_dist(), metric_type_
-                                );
-                            }
-                            prev_furthest = furthest_dist;
-                            stagnation_count = 0;
-                            rebased_after_shrink = true;
-                        }
-                        effective_ef_shrink_applied = true;
-                    }
-                }
-            }
-
-            const bool hard_stop_enabled =
-                adaptive_config->enable_stop && direct_classifier_threshold_enabled &&
-                classification_evaluated && !is_easy_query &&
-                full_pop_count >= effective_tmin_pops && !rebased_after_shrink;
-            if (hard_stop_enabled) {
-                if (furthest_dist >= prev_furthest) {
-                    stagnation_count++;
-                } else {
-                    stagnation_count = 0;
-                }
-
-                if (static_cast<size_t>(std::max(stagnation_count, 0)) >=
-                    kHardOnlyStagLimit) {
-                    stop_search = true;
-                    early_stopped = true;
-                }
-            }
-
-            prev_furthest = furthest_dist;
-        }
-
-        if (stop_search) {
-            break;
-        }
     }
 
     if (adaptive_stats != nullptr) {

@@ -54,6 +54,9 @@ def main(args=None) -> None:
                     paper_bucket_mode=args.paper_bucket_mode,
                     paper_bucket_count=args.paper_bucket_count,
                     bucket_gamma_ratios=args.bucket_gamma_ratios,
+                    classify_start=args.classify_start,
+                    classify_end=args.classify_end,
+                    cfr_ema_decay=args.cfr_ema_decay,
                 )
                 if r == 0:
                     stats_by_ef[ef] = {key: np.asarray(value) for key, value in stats.items()}
@@ -147,15 +150,18 @@ if __name__ == "__main__":
     parser.add_argument("--test-rounds", dest="test_rounds", type=int, metavar="INT", default=TEST_ROUNDS, help="Number of test rounds for averaging")
     parser.add_argument("--efs", dest="efs", type=int, nargs="+", default=None, help="EF values to benchmark; defaults to [128] for adaptive-light and a sweep otherwise")
     parser.add_argument("--adaptive-light", dest="adaptive_light", action="store_true", help="Use CFR adaptive-light search")
-    parser.add_argument("--disable-stop", dest="enable_stop", action="store_false", default=True, help="Disable hard-query stagnation stop")
+    parser.add_argument("--disable-stop", dest="enable_stop", action="store_false", default=True, help="Compatibility option; hard-stag stopping is disabled in the SAGE path")
     parser.add_argument("--early-stop-ratio", dest="early_stop_ratio", type=float, default=0.6, help="CFR threshold for easy-query classification")
-    parser.add_argument("--tmin-pops", dest="tmin_pops", type=int, default=25, help="Minimum full-queue pops before hard-query stop")
+    parser.add_argument("--tmin-pops", dest="tmin_pops", type=int, default=25, help="Compatibility option retained for older bindings")
     parser.add_argument("--ef-max", dest="ef_max", type=int, default=1024, help="Maximum effective ef for adaptive-light")
     parser.add_argument("--super-easy-gamma-ratio", dest="super_easy_gamma_ratio", type=float, default=np.nan, help="Optional super-easy bucket threshold")
     parser.add_argument("--mid-easy-upper-gamma-ratio", dest="mid_easy_upper_gamma_ratio", type=float, default=np.nan, help="Optional mid-easy bucket threshold")
     parser.add_argument("--paper-bucket-mode", dest="paper_bucket_mode", action="store_true", help="Use paper-style bucket ef routing")
     parser.add_argument("--paper-bucket-count", dest="paper_bucket_count", type=int, default=4, help="Number of paper buckets, 2 to 8")
     parser.add_argument("--bucket-gamma-ratios", dest="bucket_gamma_ratios", type=float, nargs="*", default=[], help="Monotone bucket gamma ratios for paper bucket mode")
+    parser.add_argument("--classify-start", dest="classify_start", type=int, default=4, help="First full-frontier pop in the CFR classification window")
+    parser.add_argument("--classify-end", dest="classify_end", type=int, default=16, help="Last full-frontier pop in the CFR classification window")
+    parser.add_argument("--cfr-ema-decay", dest="cfr_ema_decay", type=float, default=0.8, help="EMA decay for smoothed CFR")
     parser.add_argument("--stats-out", dest="stats_out", type=str, default=None, help="Optional CSV path for per-query adaptive stats")
     parser.add_argument("--query-hdf5-key", dest="query_hdf5_key", type=str, default="test", help="HDF5 dataset key for queries")
     parser.add_argument("--gt-hdf5-key", dest="gt_hdf5_key", type=str, default="neighbors", help="HDF5 dataset key for ground truth")

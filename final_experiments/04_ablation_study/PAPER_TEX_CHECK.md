@@ -7,7 +7,7 @@ Result: no mismatch found for the requested script scope.
 Matches:
 
 - The paper varies five SAGE hyperparameters independently: calibration set size `ncal`, CFR observation window, difficulty tier count `B`, EMA decay `alpha`, and safety margin `g`.
-- The imported ablation runner covers exactly those values shown in the paper table: `ncal={100,500,1000}`, window `{[0,12],[4,16]}`, `B={2,4,6}`, `alpha={0.0,0.4,0.8}`, and `g={1,2,3,4}`.
+- The imported ablation runner covers exactly those values shown in the paper table: `ncal={100,500,1000}`, window `{[1,13],[4,16]}`, `B={2,4,6}`, `alpha={0.0,0.4,0.8}`, and `g={1,2,3,4}`.
 - The runner holds all non-varied settings at the paper defaults: `B=4`, `g=2`, `alpha=0.8`, window `[4,16]`, `ncal=100`, and `tmin_pops=25`.
 - The run scope is FAISS, SIMD on, 24 offline/online threads, `M=32`, `efConstruction=500`, `k=10`, and `efSearch=1024`.
 - The dataset scope is restricted to `glove-100-angular.hdf5` and `cohere-768-angular.hdf5`, matching the paper ablation table columns (`GloVe100` and `CohereWiki`).

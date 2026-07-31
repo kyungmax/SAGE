@@ -230,6 +230,26 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         }
     }
 
+    static void validateCfrWindowConfig(
+        int classify_start,
+        int classify_end,
+        float cfr_ema_decay
+    ) {
+        if (classify_start < 0) {
+            throw std::invalid_argument("classify_start must be non-negative.");
+        }
+        if (classify_end < classify_start || classify_end < 1) {
+            throw std::invalid_argument(
+                "classify_end must be at least classify_start and at least 1."
+            );
+        }
+        if (!std::isfinite(cfr_ema_decay) ||
+            cfr_ema_decay < 0.0f ||
+            cfr_ema_decay > 1.0f) {
+            throw std::invalid_argument("cfr_ema_decay must lie in [0, 1].");
+        }
+    }
+
     static size_t resolvePaperBucketShrinkEf(
         size_t configured_ef,
         size_t k,
@@ -559,14 +579,17 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         const void *data_point,
         size_t ef,
         size_t k,
-        tableint hidden_internal_id = HIDDEN_NODE_NONE
+        tableint hidden_internal_id = HIDDEN_NODE_NONE,
+        float cfr_ema_decay = 0.8f
     ) const {
+        validateCfrWindowConfig(0, 1, cfr_ema_decay);
+
         std::vector<SearchStepInfo> path_info;
         size_t dist_count = 0;
         size_t dim = *((size_t *) dist_func_param_);
         size_t full_pop_count = 0;
-        static constexpr float CFR_EMA_DECAY = 0.8f;
-        static constexpr float CFR_EMA_UPDATE = 1.0f - CFR_EMA_DECAY;
+        const float CFR_EMA_DECAY = cfr_ema_decay;
+        const float CFR_EMA_UPDATE = 1.0f - CFR_EMA_DECAY;
         float runtime_smoothed_cfr = std::numeric_limits<float>::quiet_NaN();
 
         VisitedList *vl = visited_list_pool_->getFreeVisitedList();
@@ -612,6 +635,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             step.result_set_size = top_candidates.size();
             step.is_full_pop_after = false;
             step.full_pop_count_after = 0;
+            step.runtime_accepted_rate = std::numeric_limits<float>::quiet_NaN();
             step.runtime_cfr = std::numeric_limits<float>::quiet_NaN();
             step.runtime_smoothed_cfr = std::numeric_limits<float>::quiet_NaN();
             step.runtime_classify_cfr_mean = std::numeric_limits<float>::quiet_NaN();
@@ -624,6 +648,24 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
             if (!top_candidates.empty()) {
                 step.internal_dist = (float)top_candidates.top().first;
+            }
+
+            const bool pre_expansion_full = top_candidates.size() == ef;
+            if (pre_expansion_full) {
+                step.is_full_pop_after = true;
+                full_pop_count++;
+                step.full_pop_count_after = full_pop_count;
+
+                const float furthest_dist = (float)top_candidates.top().first;
+                const float cfr = (float)candidate_dist / std::max(furthest_dist, 1e-6f);
+                step.runtime_cfr = cfr;
+                if (std::isnan(runtime_smoothed_cfr)) {
+                    runtime_smoothed_cfr = cfr;
+                } else {
+                    runtime_smoothed_cfr =
+                        CFR_EMA_DECAY * runtime_smoothed_cfr + CFR_EMA_UPDATE * cfr;
+                }
+                step.runtime_smoothed_cfr = runtime_smoothed_cfr;
             }
 
             int *data = (int *) get_linklist0(current_node_id);
@@ -660,22 +702,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
             step.unvisited_neighbor_count = unvisited_count;
             step.accepted_neighbor_count = accepted_count;
-
-            if (top_candidates.size() == ef) {
-                step.is_full_pop_after = true;
-                full_pop_count++;
-                step.full_pop_count_after = full_pop_count;
-
-                float furthest_dist = (float)top_candidates.top().first;
-                float cfr = (float)candidate_dist / std::max(furthest_dist, 1e-6f);
-                step.runtime_cfr = cfr;
-                if (std::isnan(runtime_smoothed_cfr)) {
-                    runtime_smoothed_cfr = cfr;
-                } else {
-                    runtime_smoothed_cfr =
-                        CFR_EMA_DECAY * runtime_smoothed_cfr + CFR_EMA_UPDATE * cfr;
-                }
-                step.runtime_smoothed_cfr = runtime_smoothed_cfr;
+            if (pre_expansion_full) {
+                step.runtime_accepted_rate =
+                    (unvisited_count > 0)
+                        ? ((float)accepted_count / (float)unvisited_count)
+                        : 0.0f;
             }
 
             fillTraceStepMetrics(step, top_candidates, ef, k, dim);
@@ -691,7 +722,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         const void *query_data,
         size_t ef,
         size_t k,
-        tableint hidden_internal_id = HIDDEN_NODE_NONE
+        tableint hidden_internal_id = HIDDEN_NODE_NONE,
+        float cfr_ema_decay = 0.8f
     ) const {
         size_t total_dist_count = 0;
         if (cur_element_count == 0) {
@@ -734,7 +766,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         }
 
         auto [path_info, base_dist_count, closest_dist] =
-            searchBaseLayerSTWithTrace(currObj, query_data, ef, k, hidden_internal_id);
+            searchBaseLayerSTWithTrace(currObj, query_data, ef, k, hidden_internal_id, cfr_ema_decay);
         total_dist_count += base_dist_count;
 
         return {path_info, total_dist_count, closest_dist};
@@ -763,6 +795,8 @@ searchBaseLayerAdaptiveAnalysisCore(
     int    classify_end = 16,
     float  cfr_ema_decay = 0.8f
 ) const {
+    validateCfrWindowConfig(classify_start, classify_end, cfr_ema_decay);
+
     AdaptiveSearchResult output;
     size_t ef_cur = std::max<size_t>(ef_init, k);
     ef_cur = std::min(ef_cur, ef_max);
@@ -868,66 +902,14 @@ searchBaseLayerAdaptiveAnalysisCore(
         tableint *datal = (tableint *)(data + 1);
         step.popped_degree = size;
 
-#ifdef USE_SSE
-        _mm_prefetch((char *)(visited_array + *(data + 1)), _MM_HINT_T0);
-        _mm_prefetch((char *)(visited_array + *(data + 1) + 64), _MM_HINT_T0);
-        _mm_prefetch(getDataByInternalId(*datal), _MM_HINT_T0);
-        _mm_prefetch(getDataByInternalId(*(datal + 1)), _MM_HINT_T0);
-#endif
-
-        for (size_t j = 0; j < size; j++) {
-            tableint cand_id = *(datal + j);
-#ifdef USE_SSE
-            if (j + 1 < size) {
-                _mm_prefetch((char *)(visited_array + *(datal + j + 1)), _MM_HINT_T0);
-                _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
-            }
-#endif
-            if (visited_array[cand_id] == visited_array_tag) continue;
-            visited_array[cand_id] = visited_array_tag;
-            unvisited_count++;
-
-            dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand_id), dist_func_param_);
-
-            if (top_candidates.size() < ef_cur || lowerBound > d) {
-                candidate_set.emplace(-d, cand_id);
-                accepted_count++;
-#ifdef USE_SSE
-                _mm_prefetch(data_level0_memory_ + candidate_set.top().second * size_data_per_element_ + offsetLevel0_, _MM_HINT_T0);
-#endif
-
-                if constexpr (bare_bone_search) {
-                    top_candidates.emplace(d, cand_id);
-                } else {
-                    if (!isMarkedDeleted(cand_id)) {
-                        if (!isIdAllowed || (*isIdAllowed)(getExternalLabel(cand_id))) {
-                            top_candidates.emplace(d, cand_id);
-                        }
-                    }
-                }
-
-                if (top_candidates.size() > ef_cur)
-                    top_candidates.pop();
-
-                if (!top_candidates.empty())
-                    lowerBound = top_candidates.top().first;
-            }
-        }
-
-        step.unvisited_neighbor_count = unvisited_count;
-        step.accepted_neighbor_count = accepted_count;
-        const float accepted_rate =
-            (unvisited_count > 0)
-                ? ((float)accepted_count / (float)unvisited_count)
-                : 0.0f;
-
-        if (top_candidates.size() == ef_cur) {
+        const bool pre_expansion_full = top_candidates.size() == ef_cur;
+        if (pre_expansion_full) {
             step.is_full_pop_after = true;
             full_pop_count++;
             step.full_pop_count_after = (size_t)full_pop_count;
-            step.runtime_accepted_rate = accepted_rate;
-            float furthest_dist = (float)top_candidates.top().first;
-            float cfr = (float)candidate_dist / std::max(furthest_dist, 1e-6f);
+
+            const float furthest_dist = (float)top_candidates.top().first;
+            const float cfr = (float)candidate_dist / std::max(furthest_dist, 1e-6f);
             step.runtime_cfr = cfr;
             if (std::isnan(smoothed_cfr_ema)) {
                 smoothed_cfr_ema = cfr;
@@ -1005,7 +987,6 @@ searchBaseLayerAdaptiveAnalysisCore(
                             }
                             if (!top_candidates.empty()) {
                                 lowerBound = top_candidates.top().first;
-                                furthest_dist = (float)top_candidates.top().first;
                             }
                         }
                         effective_ef_shrink_applied = true;
@@ -1019,6 +1000,63 @@ searchBaseLayerAdaptiveAnalysisCore(
             step.runtime_is_super_easy_query = classification_evaluated && is_super_easy_query;
             step.runtime_is_mid_easy_query = classification_evaluated && is_mid_easy_query;
             step.runtime_effective_ef = ef_cur;
+        }
+
+#ifdef USE_SSE
+        _mm_prefetch((char *)(visited_array + *(data + 1)), _MM_HINT_T0);
+        _mm_prefetch((char *)(visited_array + *(data + 1) + 64), _MM_HINT_T0);
+        _mm_prefetch(getDataByInternalId(*datal), _MM_HINT_T0);
+        _mm_prefetch(getDataByInternalId(*(datal + 1)), _MM_HINT_T0);
+#endif
+
+        for (size_t j = 0; j < size; j++) {
+            tableint cand_id = *(datal + j);
+#ifdef USE_SSE
+            if (j + 1 < size) {
+                _mm_prefetch((char *)(visited_array + *(datal + j + 1)), _MM_HINT_T0);
+                _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
+            }
+#endif
+            if (visited_array[cand_id] == visited_array_tag) continue;
+            visited_array[cand_id] = visited_array_tag;
+            unvisited_count++;
+
+            dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand_id), dist_func_param_);
+
+            if (top_candidates.size() < ef_cur || lowerBound > d) {
+                candidate_set.emplace(-d, cand_id);
+                accepted_count++;
+#ifdef USE_SSE
+                _mm_prefetch(data_level0_memory_ + candidate_set.top().second * size_data_per_element_ + offsetLevel0_, _MM_HINT_T0);
+#endif
+
+                if constexpr (bare_bone_search) {
+                    top_candidates.emplace(d, cand_id);
+                } else {
+                    if (!isMarkedDeleted(cand_id)) {
+                        if (!isIdAllowed || (*isIdAllowed)(getExternalLabel(cand_id))) {
+                            top_candidates.emplace(d, cand_id);
+                        }
+                    }
+                }
+
+                if (top_candidates.size() > ef_cur)
+                    top_candidates.pop();
+
+                if (!top_candidates.empty())
+                    lowerBound = top_candidates.top().first;
+            }
+        }
+
+        step.unvisited_neighbor_count = unvisited_count;
+        step.accepted_neighbor_count = accepted_count;
+        const float accepted_rate =
+            (unvisited_count > 0)
+                ? ((float)accepted_count / (float)unvisited_count)
+                : 0.0f;
+
+        if (pre_expansion_full) {
+            step.runtime_accepted_rate = accepted_rate;
         }
 
         fillTraceStepMetrics(step, top_candidates, ef_cur, k, dim);
@@ -1259,6 +1297,8 @@ searchBaseLayerAdaptiveLightCore(
     int    classify_end = 16,
     float  cfr_ema_decay = 0.8f
 ) const {
+    validateCfrWindowConfig(classify_start, classify_end, cfr_ema_decay);
+
     size_t ef_cur = std::max<size_t>(ef_init, k);
     ef_cur = std::min(ef_cur, ef_max);
     const size_t configured_ef_cur = ef_cur;
@@ -1335,60 +1375,11 @@ searchBaseLayerAdaptiveLightCore(
         candidate_set.pop();
         tableint curr_id = current_node_pair.second;
 
-        int *data = (int*)get_linklist0(curr_id);
-        size_t size = getListCount((linklistsizeint*)data);
-        tableint *datal = (tableint *)(data + 1);
-
-#ifdef USE_SSE
-        _mm_prefetch((char *)(visited_array + *(data + 1)), _MM_HINT_T0);
-        _mm_prefetch((char *)(visited_array + *(data + 1) + 64), _MM_HINT_T0);
-        _mm_prefetch(getDataByInternalId(*datal), _MM_HINT_T0);
-        _mm_prefetch(getDataByInternalId(*(datal + 1)), _MM_HINT_T0);
-#endif
-
-        for (size_t j = 0; j < size; j++) {
-            tableint cand_id = *(datal + j);
-#ifdef USE_SSE
-            if (j + 1 < size) {
-                _mm_prefetch((char *)(visited_array + *(datal + j + 1)), _MM_HINT_T0);
-                _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
-            }
-#endif
-            if (visited_array[cand_id] == visited_array_tag) continue;
-            visited_array[cand_id] = visited_array_tag;
-
-            dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand_id), dist_func_param_);
-
-            if (top_candidates.size() < ef_cur || lowerBound > d) {
-                candidate_set.emplace(-d, cand_id);
-#ifdef USE_SSE
-                _mm_prefetch(data_level0_memory_ + candidate_set.top().second * size_data_per_element_ + offsetLevel0_, _MM_HINT_T0);
-#endif
-
-                if constexpr (bare_bone_search) {
-                    top_candidates.emplace(d, cand_id);
-                } else {
-                    if (!isMarkedDeleted(cand_id)) {
-                        if (!isIdAllowed || (*isIdAllowed)(getExternalLabel(cand_id))) {
-                            top_candidates.emplace(d, cand_id);
-                        }
-                    }
-                }
-
-                if (top_candidates.size() > ef_cur) {
-                    top_candidates.pop();
-                }
-
-                if (!top_candidates.empty()) {
-                    lowerBound = top_candidates.top().first;
-                }
-            }
-        } // end for
-
-        if (top_candidates.size() == ef_cur) {
+        const bool pre_expansion_full = top_candidates.size() == ef_cur;
+        if (pre_expansion_full) {
             full_pop_count++;
-            float furthest_dist = (float)top_candidates.top().first;
-            float cfr = (float)candidate_dist / std::max(furthest_dist, 1e-6f);
+            const float furthest_dist = (float)top_candidates.top().first;
+            const float cfr = (float)candidate_dist / std::max(furthest_dist, 1e-6f);
             if (std::isnan(smoothed_cfr_ema)) {
                 smoothed_cfr_ema = cfr;
             } else {
@@ -1461,15 +1452,65 @@ searchBaseLayerAdaptiveLightCore(
                             }
                             if (!top_candidates.empty()) {
                                 lowerBound = top_candidates.top().first;
-                                furthest_dist = (float)top_candidates.top().first;
                             }
                         }
                         effective_ef_shrink_applied = true;
                     }
                 }
             }
-
         }
+
+        int *data = (int*)get_linklist0(curr_id);
+        size_t size = getListCount((linklistsizeint*)data);
+        tableint *datal = (tableint *)(data + 1);
+
+#ifdef USE_SSE
+        _mm_prefetch((char *)(visited_array + *(data + 1)), _MM_HINT_T0);
+        _mm_prefetch((char *)(visited_array + *(data + 1) + 64), _MM_HINT_T0);
+        _mm_prefetch(getDataByInternalId(*datal), _MM_HINT_T0);
+        _mm_prefetch(getDataByInternalId(*(datal + 1)), _MM_HINT_T0);
+#endif
+
+        for (size_t j = 0; j < size; j++) {
+            tableint cand_id = *(datal + j);
+#ifdef USE_SSE
+            if (j + 1 < size) {
+                _mm_prefetch((char *)(visited_array + *(datal + j + 1)), _MM_HINT_T0);
+                _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
+            }
+#endif
+            if (visited_array[cand_id] == visited_array_tag) continue;
+            visited_array[cand_id] = visited_array_tag;
+
+            dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand_id), dist_func_param_);
+
+            if (top_candidates.size() < ef_cur || lowerBound > d) {
+                candidate_set.emplace(-d, cand_id);
+#ifdef USE_SSE
+                _mm_prefetch(data_level0_memory_ + candidate_set.top().second * size_data_per_element_ + offsetLevel0_, _MM_HINT_T0);
+#endif
+
+                if constexpr (bare_bone_search) {
+                    top_candidates.emplace(d, cand_id);
+                } else {
+                    if (!isMarkedDeleted(cand_id)) {
+                        if (!isIdAllowed || (*isIdAllowed)(getExternalLabel(cand_id))) {
+                            top_candidates.emplace(d, cand_id);
+                        }
+                    }
+                }
+
+                if (top_candidates.size() > ef_cur) {
+                    top_candidates.pop();
+                }
+
+                if (!top_candidates.empty()) {
+                    lowerBound = top_candidates.top().first;
+                }
+            }
+        } // end for
+
+
     } // end while
 
     visited_list_pool_->releaseVisitedList(vl);

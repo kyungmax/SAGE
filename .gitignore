@@ -4,3 +4,11 @@ index/*
 datasets/*
 !datasets/README.md
 sage.local.env
+__pycache__/
+
+# Local FAISS build used by final_experiments defaults
+faiss/build_sage_avx512/
+
+# Final experiment generated outputs
+final_experiments/04_ablation_study/sage_ablation_faiss_glove_cohere_24t_m32_efc500_ef1024_current_cfr/
+final_experiments/01_main_results/main8_online24_current_cfr_quick_agnews_landmark_glove/

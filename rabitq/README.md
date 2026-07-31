@@ -28,13 +28,13 @@ Compared with the upstream RaBitQ Library, the SAGE-specific changes are concent
 - `include/rabitqlib/index/hnsw/hnsw.hpp`
   - Adds adaptive-light HNSW search entry points.
   - Computes the online CFR difficulty signal during base-layer traversal.
-  - Applies EMA smoothing with `alpha = 0.8` over the early classification window.
+  - Applies configurable EMA smoothing over the early classification window.
   - Supports hide-node traversal for train-probe calibration.
   - Implements paper bucket routing with `paper_bucket_count=4` and calibrated `bucket_gamma_ratios`.
 
 - `python_bindings/hnsw_bindings.cpp`
   - Exposes `search_adaptive_light` and `search_adaptive_light_with_stats` to Python.
-  - Exposes adaptive controls: `paper_bucket_mode`, `paper_bucket_count`, `bucket_gamma_ratios`, and `hide_labels`.
+  - Exposes adaptive controls: `paper_bucket_mode`, `paper_bucket_count`, `bucket_gamma_ratios`, `hide_labels`, `classify_start`, `classify_end`, and `cfr_ema_decay`.
   - Returns per-query adaptive statistics used by the calibration scripts.
 
 - `experiments_scripts/rabitq/`
@@ -44,7 +44,7 @@ Compared with the upstream RaBitQ Library, the SAGE-specific changes are concent
 
 RaBitQ performs HNSW search using binary-quantized distance estimates. SAGE adds adaptive `efSearch` routing to the RaBitQ HNSW base-layer search.
 
-During traversal, the C++ search loop computes a CFR-style difficulty signal from the current popped candidate distance and the frontier distance. The signal is smoothed with EMA decay `alpha = 0.8`, and the early-window mean is exposed as `classify_cfr_mean`.
+During traversal, the C++ search loop computes a CFR-style difficulty signal from the current popped candidate distance and the pre-expansion frontier distance. The signal is smoothed with configurable EMA decay, and the early-window mean is exposed as `classify_cfr_mean`. Hard-query stagnation stopping is disabled for the RaBitQ+SAGE path; adaptation happens through calibrated `efSearch` bucket routing.
 
 The calibration script builds an offline policy as follows:
 

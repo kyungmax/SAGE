@@ -266,7 +266,7 @@ def _build_cache_settings(
     settings["classify_end"] = int(classify_end)
     settings["cfr_ema_decay"] = float(cfr_ema_decay)
     settings["use_pre_frontier_cfr"] = bool(use_pre_frontier_cfr)
-    settings["cfr_observation_mode"] = "pre_frontier" if bool(use_pre_frontier_cfr) else "post_expansion"
+    settings["cfr_observation_mode"] = "pre_frontier" if bool(use_pre_frontier_cfr) else "pre_expansion_full_pop"
     settings["paper_floor_pair_gap"] = int(paper_floor_pair_gap)
     if (
         str(lid_sampling_mode) != "full"
@@ -559,9 +559,8 @@ def _extract_cfr_mean_by_query(
     # computes the classify-window smoothed-CFR mean entirely in the C++ search
     # and returns compact per-query arrays. This replaces the old per-step trace
     # path (search_layer0_path_with_dist_metrics_*), which marshalled every search
-    # step into a Python dict and re-derived the CFR EMA in Python — the calibration
-    # bottleneck. The summary is a faithful port of that aggregation, so calibrated
-    # thresholds are unchanged (values identical up to float rounding).
+    # step into a Python dict. The native summary owns the current CFR observation
+    # timing and denominator convention, so calibration metadata records that mode.
     summary_fn_name = (
         "search_layer0_cfr_summary_pre_frontier"
         if bool(use_pre_frontier_cfr)
@@ -607,7 +606,7 @@ def _extract_cfr_mean_by_query(
                 "window_obs_count": int(window_obs_counts[local_idx]),
                 "usable_for_mean_window_calibration": usable,
                 "mean_smoothed_cfr_classify_window": mean_window,
-                "cfr_observation_mode": "pre_frontier" if bool(use_pre_frontier_cfr) else "post_expansion",
+                "cfr_observation_mode": "pre_frontier" if bool(use_pre_frontier_cfr) else "pre_expansion_full_pop",
             }
         )
     return pd.DataFrame(rows).sort_values("selection_rank").reset_index(drop=True)

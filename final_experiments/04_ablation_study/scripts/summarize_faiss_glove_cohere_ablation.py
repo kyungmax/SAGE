@@ -21,7 +21,7 @@ STUDIES: dict[str, dict[str, Any]] = {
     },
     "02_classification_window": {
         "parameter": "CFR observation window",
-        "variants": [("window_0_12", "[0,12]"), ("window_4_16", "[4,16]")],
+        "variants": [("window_1_13", "[1,13]"), ("window_4_16", "[4,16]")],
     },
     "03_tiers": {
         "parameter": "Difficulty tier count (B)",

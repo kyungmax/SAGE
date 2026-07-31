@@ -133,7 +133,7 @@ def ablation_metadata(args: argparse.Namespace) -> dict[str, Any]:
         "cfr_ema_decay": float(args.cfr_ema_decay),
         "use_pre_frontier_cfr": bool(getattr(args, "use_pre_frontier_cfr", False)),
         "cfr_observation_mode": (
-            "pre_frontier" if bool(getattr(args, "use_pre_frontier_cfr", False)) else "post_expansion"
+            "pre_frontier" if bool(getattr(args, "use_pre_frontier_cfr", False)) else "pre_expansion_full_pop"
         ),
         "pair_gap": int(args.pair_gap),
     }
@@ -929,7 +929,7 @@ def main() -> int:
                         "mixed_threshold_mode": str(args.mixed_threshold_mode),
                         "use_pre_frontier_cfr": bool(args.use_pre_frontier_cfr),
                         "cfr_observation_mode": (
-                            "pre_frontier" if bool(args.use_pre_frontier_cfr) else "post_expansion"
+                            "pre_frontier" if bool(args.use_pre_frontier_cfr) else "pre_expansion_full_pop"
                         ),
                         "mixed_bucket_count": (
                             int(args.mixed_bucket_count)

@@ -365,7 +365,7 @@ static SageLevel0SearchResult sage_search_level0_hidden(
         }
 
         const size_t rs_size_after = top_candidates.size();
-        const bool is_full = rs_size_after == ef_search;
+        const bool is_full = rs_size_before == ef_search;
         float runtime_accepted_rate = nan;
         float runtime_cfr = nan;
         float runtime_smoothed_cfr = nan;
@@ -382,8 +382,11 @@ static SageLevel0SearchResult sage_search_level0_hidden(
             runtime_accepted_rate = unvisited_count > 0
                     ? static_cast<float>(accepted_count) / static_cast<float>(unvisited_count)
                     : 0.0f;
-            if (std::isfinite(furthest_dist) && std::fabs(furthest_dist) > 1e-6f) {
-                runtime_cfr = popped_query_dist / std::max(furthest_dist, 1e-6f);
+            const float cfr_denominator_dist = internal_dist;
+            if (std::isfinite(cfr_denominator_dist) &&
+                std::fabs(cfr_denominator_dist) > 1e-6f) {
+                runtime_cfr = popped_query_dist /
+                        std::max(cfr_denominator_dist, 1e-6f);
                 if (std::isnan(smoothed_cfr_ema)) {
                     smoothed_cfr_ema = runtime_cfr;
                 } else {
@@ -451,7 +454,8 @@ static SageLevel0SearchResult sage_search_level0_hidden(
         result.mean_smoothed_cfr_classify_window = static_cast<float>(
                 classify_window_sum / static_cast<double>(classify_window_count));
     }
-    result.usable_for_mean_window = full_pop_count >= 16 &&
+    result.usable_for_mean_window =
+            full_pop_count >= static_cast<size_t>(cfr_config.classify_end) &&
             std::isfinite(result.mean_smoothed_cfr_classify_window);
     result.closest_dist = sage_external_distance(best_raw_distance, similarity_metric);
 

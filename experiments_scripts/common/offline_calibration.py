@@ -125,7 +125,7 @@ def resolve_mixed_policy_with_status(
             "classify_end": int(classify_end),
             "cfr_ema_decay": float(cfr_ema_decay),
             "use_pre_frontier_cfr": bool(use_pre_frontier_cfr),
-            "cfr_observation_mode": "pre_frontier" if bool(use_pre_frontier_cfr) else "post_expansion",
+            "cfr_observation_mode": "pre_frontier" if bool(use_pre_frontier_cfr) else "pre_expansion_full_pop",
             "pair_gap": int(pair_gap),
         },
     )

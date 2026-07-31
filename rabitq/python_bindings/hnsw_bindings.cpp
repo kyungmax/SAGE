@@ -154,7 +154,10 @@ class HnswIndex {
         bool paper_bucket_mode = false,
         int paper_bucket_count = 4,
         const std::vector<float>& bucket_gamma_ratios = {},
-        py::object hide_labels = py::none()
+        py::object hide_labels = py::none(),
+        int classify_start = 4,
+        int classify_end = 16,
+        float cfr_ema_decay = 0.8F
     ) {
         auto query_array = ensure_2d_array<float>(queries, "queries");
         if (dim_ != 0 && static_cast<size_t>(query_array.shape(1)) != dim_) {
@@ -177,6 +180,9 @@ class HnswIndex {
         config.early_stop_ratio = early_stop_ratio;
         config.super_easy_gamma_ratio = super_easy_gamma_ratio;
         config.mid_easy_upper_gamma_ratio = mid_easy_upper_gamma_ratio;
+        config.classify_start = classify_start;
+        config.classify_end = classify_end;
+        config.cfr_ema_decay = cfr_ema_decay;
         config.paper_bucket_mode = paper_bucket_mode;
         config.paper_bucket_count = paper_bucket_count;
         for (size_t i = 0; i < bucket_gamma_ratios.size(); ++i) {
@@ -232,7 +238,10 @@ class HnswIndex {
         bool paper_bucket_mode = false,
         int paper_bucket_count = 4,
         const std::vector<float>& bucket_gamma_ratios = {},
-        py::object hide_labels = py::none()
+        py::object hide_labels = py::none(),
+        int classify_start = 4,
+        int classify_end = 16,
+        float cfr_ema_decay = 0.8F
     ) {
         auto query_array = ensure_2d_array<float>(queries, "queries");
         if (dim_ != 0 && static_cast<size_t>(query_array.shape(1)) != dim_) {
@@ -255,6 +264,9 @@ class HnswIndex {
         config.early_stop_ratio = early_stop_ratio;
         config.super_easy_gamma_ratio = super_easy_gamma_ratio;
         config.mid_easy_upper_gamma_ratio = mid_easy_upper_gamma_ratio;
+        config.classify_start = classify_start;
+        config.classify_end = classify_end;
+        config.cfr_ema_decay = cfr_ema_decay;
         config.paper_bucket_mode = paper_bucket_mode;
         config.paper_bucket_count = paper_bucket_count;
         for (size_t i = 0; i < bucket_gamma_ratios.size(); ++i) {
@@ -562,7 +574,10 @@ void register_hnsw(py::module_ &m) {
              py::arg("paper_bucket_mode") = false,
              py::arg("paper_bucket_count") = 4,
              py::arg("bucket_gamma_ratios") = std::vector<float>{},
-             py::arg("hide_labels") = py::none())
+             py::arg("hide_labels") = py::none(),
+             py::arg("classify_start") = 4,
+             py::arg("classify_end") = 16,
+             py::arg("cfr_ema_decay") = 0.8F)
         .def("search_adaptive_light_with_stats", &HnswIndex::search_adaptive_light_with_stats,
              py::arg("queries"),
              py::arg("k"),
@@ -577,7 +592,10 @@ void register_hnsw(py::module_ &m) {
              py::arg("paper_bucket_mode") = false,
              py::arg("paper_bucket_count") = 4,
              py::arg("bucket_gamma_ratios") = std::vector<float>{},
-             py::arg("hide_labels") = py::none())
+             py::arg("hide_labels") = py::none(),
+             py::arg("classify_start") = 4,
+             py::arg("classify_end") = 16,
+             py::arg("cfr_ema_decay") = 0.8F)
         .def("pairwise_est_dist",
              &HnswIndex::pairwise_est_dist,
              py::arg("queries"))
