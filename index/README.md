@@ -6,7 +6,7 @@ Expected default layout:
 
 ```text
 index/
-  faiss_m32_efc500_main8_20260707/
+  faiss_m32_efc500_main8/
     index/
       <dataset-stem>/
         <dataset-stem>.M32.efC500.index

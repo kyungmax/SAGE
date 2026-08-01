@@ -38,7 +38,7 @@ DEFAULT_INDEX_DIR = Path(os.environ.get("SAGE_INDEX_DIR", str(DEFAULT_PROJECT_RO
 DEFAULT_M32_INDEX_ROOT = Path(
     os.environ.get(
         "SAGE_FAISS_INDEX_ROOT",
-        os.environ.get("FAISS_INDEX_ROOT", str(DEFAULT_INDEX_DIR / "faiss_m32_efc500_main8_20260707/index")),
+        os.environ.get("FAISS_INDEX_ROOT", str(DEFAULT_INDEX_DIR / "faiss_m32_efc500_main8/index")),
     )
 ).expanduser()
 DEFAULT_INDEX_ROOT_BASE = DEFAULT_INDEX_DIR / "faiss_graph_quality_ndis/index"

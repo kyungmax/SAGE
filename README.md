@@ -64,9 +64,12 @@ source ./sage_env.sh
 
 By default, datasets are read from `$SAGE_ROOT/datasets`, hnswlib indexes from
 `$SAGE_ROOT/index`, and FAISS indexes from
-`$SAGE_ROOT/index/faiss_m32_efc500_main8_20260707/index`. To keep large
+`$SAGE_ROOT/index/faiss_m32_efc500_main8/index`. To keep large
 files on another volume, export `SAGE_DATA_DIR` and/or `SAGE_INDEX_DIR` before
 running `setup.sh` or sourcing `sage_env.sh`.
+
+Prepared artifact inputs that are not direct public HDF5 downloads are linked in
+[SAGE data artifacts](https://drive.google.com/drive/folders/12tu88Hx0D4BYGeIzqqbG60bzov57fyKb?usp=sharing).
 
 After building FAISS and hnswlib and placing the data/index files, the main
 artifact entrypoint is:
@@ -224,7 +227,7 @@ experiments.
 Expected default FAISS layout:
 
 ```text
-index/faiss_m32_efc500_main8_20260707/index/<dataset-stem>/<dataset-stem>.M32.efC500.index
+index/faiss_m32_efc500_main8/index/<dataset-stem>/<dataset-stem>.M32.efC500.index
 ```
 
 hnswlib indexes are read directly from `SAGE_INDEX_DIR` using filenames produced

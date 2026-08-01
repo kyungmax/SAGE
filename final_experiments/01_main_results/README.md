@@ -26,7 +26,7 @@ Datasets:
 Environment variables:
 - `SAGE_DATA_DIR`: dataset HDF5 root. Defaults to `$SAGE_ROOT/datasets`.
 - `SAGE_INDEX_DIR`: hnswlib index root. Defaults to `<repo>/index`.
-- `SAGE_FAISS_INDEX_ROOT` or `FAISS_INDEX_ROOT`: FAISS HNSW index root. Defaults to `$SAGE_INDEX_DIR/faiss_m32_efc500_main8_20260707/index`.
+- `SAGE_FAISS_INDEX_ROOT` or `FAISS_INDEX_ROOT`: FAISS HNSW index root. Defaults to `$SAGE_INDEX_DIR/faiss_m32_efc500_main8/index`.
 - `FAISS_PYTHON_PATH`: patched FAISS Python package. Defaults to `<repo>/faiss/build_sage_avx512/faiss/python`.
 - `SAGE_PYTHON`: Python executable for child cells. Defaults to the Python executable used to launch the runner.
 
