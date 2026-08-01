@@ -1,9 +1,9 @@
-# Query-Adaptive Early Termination via HNSW-Inherent Signals
+# Start Wide, Cut Early: Self-Calibrating Adaptive HNSW Search
 
 ## Overview
 
-This repository contains the artifact for **Query-Adaptive Early Termination via
-HNSW-Inherent Signals** and its **SAGE** (**S**ignal-driven **A**daptive
+This repository contains the artifact for **Start Wide, Cut Early: Self-Calibrating Adaptive HNSW Search** 
+and its **SAGE** (**S**ignal-driven **A**daptive
 **G**reedy **E**arly-stop) implementation. SAGE is an adaptive HNSW search method
 built around the *start wide, cut early* strategy: it begins each query with a
 wide baseline `efSearch` to protect hard queries, then reduces the budget
