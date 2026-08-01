@@ -118,8 +118,8 @@ Planned DARTH settings:
 
 Verified reusable FAISS index root:
 
-- `/home/kyungmin/vectordb/hnsw-playground/index/faiss_m32_efc500_main8_20260707/darth/index`
-- Resolved target on this machine: `/home/smrc/samsung-nvme/kyungmin/index/faiss_m32_efc500_main8_20260707/darth/index`
+- `/home/kyungmin/vectordb/hnsw-playground/index/faiss_m32_efc500_main8_20260707/index`
+- Resolved target on this machine: `/home/smrc/samsung-nvme/kyungmin/index/faiss_m32_efc500_main8_20260707/index`
 
 Verified reusable index files:
 

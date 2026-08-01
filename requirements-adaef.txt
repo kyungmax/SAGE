@@ -1,0 +1,4 @@
+# Python dependencies for Ada-EF final wrappers/preflight.
+# Ada-EF's C++ runner still requires CMake, OpenMP, HDF5 C++ libraries, Eigen3, and Boost headers.
+h5py
+numpy

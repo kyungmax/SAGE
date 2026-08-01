@@ -67,7 +67,7 @@ DATASETS: dict[str, DatasetSpec] = {
         faiss_name="nytimes-256-angular",
         hnswlib_index=INDEX_ROOT / "nytimes-256-angular_M32_M32_efC500_n290000_dim256",
         faiss_index=INDEX_ROOT
-        / "m32_efc500_target095_adaef_darth_efs1000_20260603/darth/index/nytimes-256-angular/nytimes-256-angular.M32.efC500.index",
+        / "m32_efc500_target095_adaef_darth_efs1000_20260603/index/nytimes-256-angular/nytimes-256-angular.M32.efC500.index",
         dim=256,
     ),
     "glove": DatasetSpec(
@@ -78,7 +78,7 @@ DATASETS: dict[str, DatasetSpec] = {
         faiss_name="glove-100-angular",
         hnswlib_index=INDEX_ROOT / "glove-100-angular_M32_M32_efC500_n1183514_dim100",
         faiss_index=INDEX_ROOT
-        / "m32_efc500_target095_adaef_darth_efs1000_20260603/darth/index/glove-100-angular/glove-100-angular.M32.efC500.index",
+        / "m32_efc500_target095_adaef_darth_efs1000_20260603/index/glove-100-angular/glove-100-angular.M32.efC500.index",
         dim=100,
     ),
 }

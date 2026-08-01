@@ -1,19 +1,23 @@
-# SAGE: Signal-driven Adaptive Greedy Early-stop
+# SAGE Artifact: Query-Adaptive Early Termination via HNSW-Inherent Signals
 
 ## Overview
 
-This repository contains the artifact for **SAGE** (**S**ignal-driven
-**A**daptive **G**reedy **E**arly-stop), an adaptive HNSW search method that
-keeps the index fixed, starts from a deliberately wide `efSearch`, and stops the
-greedy layer-0 search early for easy queries using a runtime
-Candidate-to-Furthest Ratio (CFR) signal.
+This repository contains the artifact for **Query-Adaptive Early Termination via
+HNSW-Inherent Signals** and its **SAGE** (**S**ignal-driven **A**daptive
+**G**reedy **E**arly-stop) implementation. SAGE is an adaptive HNSW search method
+built around the *start wide, cut early* strategy: it begins each query with a
+wide baseline `efSearch` to protect hard queries, then reduces the budget
+mid-traversal for easy queries using the runtime Candidate-to-Furthest Ratio
+(CFR) signal.
 
-SAGE requires no offline training workload, no historical queries, and no index
-rebuild. The core artifact implementation is the patched FAISS runtime path; a
-secondary hnswlib implementation is included to validate that the policy ports
-across independent HNSW implementations. In both backends, index construction,
-distance computation, and the HNSW graph layout are unchanged; SAGE adds scalar
-bookkeeping in the layer-0 search loop and exposes the adaptive query path
+SAGE requires no external query workload, no learned model, and no index rebuild.
+It performs a lightweight one-time calibration after index construction using
+LID-stratified probes sampled from the index itself. The core artifact
+implementation is the patched FAISS runtime path; a secondary hnswlib
+implementation is included to validate that the policy ports across independent
+HNSW implementations. In both backends, index construction, distance
+computation, and the HNSW graph layout are unchanged; SAGE adds only scalar
+bookkeeping in the base-layer search loop and exposes the adaptive query path
 through `knn_query_adaptive_light`.
 
 **Repository layout**
@@ -46,16 +50,7 @@ through `knn_query_adaptive_light`.
 - `final_experiments/05_embedding_model_effects/` -- embedding-model comparison.
 - `final_experiments/06_better_index_quality/` -- HNSW graph-quality study.
 - `final_experiments/07_darth_ada-ef/` -- DARTH and Ada-EF target-0.99 comparison scripts.
-- `final_analysis/` -- analysis scripts and submission-figure generation for
-  probe representativeness, difficulty drill-down, CFR behavior, and backend
-  distance-count checks.
 - `baselines/` -- baseline source snapshots, wrappers, and provenance notes.
-- `plots/` -- plot-generation scripts and gnuplot templates.
-- `docs/` -- artifact notes, troubleshooting, and dataset/index instructions.
-
-> **Artifact status:** this README is the submission-facing draft. `TODO`
-> entries mark information that should be filled before artifact packaging
-> (public data links, checksums, exact figure numbers, and citation metadata).
 
 ## Quick Start
 
@@ -69,7 +64,7 @@ source ./sage_env.sh
 
 By default, datasets are read from `$SAGE_ROOT/datasets`, hnswlib indexes from
 `$SAGE_ROOT/index`, and FAISS indexes from
-`$SAGE_ROOT/index/faiss_m32_efc500_main8_20260707/darth/index`. To keep large
+`$SAGE_ROOT/index/faiss_m32_efc500_main8_20260707/index`. To keep large
 files on another volume, export `SAGE_DATA_DIR` and/or `SAGE_INDEX_DIR` before
 running `setup.sh` or sourcing `sage_env.sh`.
 
@@ -98,24 +93,25 @@ Use the underlying runner subcommands through the same wrapper when needed:
 
 ## Software Dependencies
 
-SAGE uses a patched CPU FAISS build with Python bindings, plus Python utilities
-for calibration, benchmarking, and plotting.
+SAGE uses patched CPU FAISS and hnswlib builds with Python bindings, plus
+Python utilities for calibration, benchmarking, and plotting.
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
-    build-essential cmake g++ make swig \
+    build-essential cmake g++ make swig pkg-config \
     python3 python3-dev python3-pip \
-    libopenblas-dev libomp-dev \
+    libopenblas-dev libomp-dev libhdf5-dev \
+    libeigen3-dev libboost-all-dev \
     gnuplot
 
-pip3 install \
-    numpy pandas scipy h5py matplotlib seaborn \
-    scikit-learn pytest
+python3 -m pip install -r requirements.txt
 ```
 
 FAISS requires a C++20 compiler and BLAS. The final paper runs used the
-optimized CPU path; AVX-512 is recommended on matching hardware.
+optimized CPU path; AVX-512 is recommended on matching hardware. Do not install
+`faiss-cpu` into the main SAGE environment; build the patched FAISS tree below
+and use `FAISS_PYTHON_PATH`.
 
 ## Build
 
@@ -161,12 +157,31 @@ The final line must print `True`.
 ### hnswlib
 
 The hnswlib implementation is used for cross-backend validation and for
-comparisons against the FAISS implementation.
+comparisons against the FAISS implementation. Build and install it from the
+vendored patched source:
 
 ```bash
+source /path/to/sage/sage_env.sh
 cd $SAGE_ROOT/hnswlib
-python3 -m pip install -e .
+python3 -m pip install --no-build-isolation -e .
 ```
+
+By default, `hnswlib/setup.py` builds the extension with `-O3`, `-march=native`,
+and OpenMP (`-fopenmp`) on Unix-like systems. To build a more portable binary
+without `-march=native`, set `HNSWLIB_NO_NATIVE=1` before installing.
+
+Sanity check:
+
+```bash
+python3 - <<'PY'
+import hnswlib
+p = hnswlib.Index(space="l2", dim=4)
+print(hnswlib.__file__)
+print(hasattr(p, "knn_query_adaptive_light"))
+PY
+```
+
+The final line must print `True`.
 
 ## Data and Indexes
 
@@ -196,17 +211,15 @@ not have a stable public HDF5 source.
 | `agnews-mxbai-1024-euclidean.hdf5` | 769K | 1024 | Euclidean | [VIBE dataset bundle](https://huggingface.co/datasets/vector-index-bench/vibe) |
 | `landmark-nomic-768-angular.hdf5` | 761K | 768 | angular | [VIBE `landmark-nomic-768-normalized.hdf5`](https://huggingface.co/datasets/vector-index-bench/vibe); save or symlink as the expected filename |
 
-Prebuilt indexes should be downloaded from the SAGE artifact Google Drive link
-and copied or extracted into `index/`:
-
-```text
-TODO: Google Drive index/artifact link
-```
+Prebuilt indexes from the SAGE artifact bundle should be copied or extracted
+into `index/`. To keep them elsewhere, set `SAGE_INDEX_DIR`,
+`SAGE_FAISS_INDEX_ROOT`, or `SAGE_HNSWLIB_INDEX_ROOT` before running the
+experiments.
 
 Expected default FAISS layout:
 
 ```text
-index/faiss_m32_efc500_main8_20260707/darth/index/<dataset-stem>/<dataset-stem>.M32.efC500.index
+index/faiss_m32_efc500_main8_20260707/index/<dataset-stem>/<dataset-stem>.M32.efC500.index
 ```
 
 hnswlib indexes are read directly from `SAGE_INDEX_DIR` using filenames produced
@@ -229,7 +242,6 @@ Default paper configuration:
 - CFR EMA decay: `alpha=0.8`
 - routing buckets: `B=4`
 - conservative threshold pair gap: `g=2`
-- `tmin_pops=25`
 - offline/calibration threads: `24`
 - online search threads: `24`
 
@@ -239,19 +251,17 @@ The commands below generate per-dataset run outputs in the `run/` directory for
 each experiment and consolidated CSV/Markdown summaries under `final/`; these are
 expected generated artifacts, not source files to maintain in git.
 
-| Paper result | Driver | Description | Backend |
-|--------------|--------|-------------|---------|
-| Main eight-dataset sweep | `final_experiments/01_main_results/run_main8_online24_20260707.py` | Vanilla HNSW vs SAGE over the EF ladder for both FAISS and hnswlib | FAISS + hnswlib |
-| Main plotting | `final_experiments/01_main_results/main8_online24/combined_faiss_SIMD/` | Builds the eight-dataset recall-latency plot from final sweep CSVs | FAISS + hnswlib |
-| Backend-specific sweep | `experiments_scripts/{faiss,hnswlib}/run_main_qps_latency_sweep.py` | Lower-level per-backend runners used by the main8 wrapper | FAISS / hnswlib |
-| Difficulty drill-down | `final_experiments/02_drill_down/scripts/` | Easy/medium/hard group analysis and false-easy replay | FAISS + hnswlib |
-| Offline calibration cost | `final_experiments/03_offline_cost/run_all_simd_24t.sh` | SAGE offline calibration cost with 24-thread SIMD-on FAISS and hnswlib | FAISS + hnswlib |
-| Ablation study | `final_experiments/04_ablation_study/` | FAISS GloVe/Cohere parameter sensitivity and pseudo-GT check | FAISS |
-| Embedding-model effects | `final_experiments/05_embedding_model_effects/` | MSMARCO five-embedding comparison with FAISS SIMD-on 24-thread runner | FAISS |
-| Index-quality study | `final_experiments/06_better_index_quality/run_faiss_simd_ndis_ef1024.py` | Varying HNSW graph quality (`M`, `efConstruction`) | FAISS |
-| DARTH / Ada-EF target-0.99 | `final_experiments/07_darth_ada-ef/` | SOTA comparison on Cohere/MSMARCO with SIMD-on full-query runs | FAISS + hnswlib |
-
-TODO: replace `Paper result` labels with final VLDB figure/table numbers.
+| Experiment | Driver | Backend |
+|------------|--------|---------|
+| Main eight-dataset sweep | `final_experiments/01_main_results/main8_online24/run_all.sh` | FAISS + hnswlib |
+| Main plotting | `final_experiments/01_main_results/main8_online24/combined_faiss_SIMD/main8_recall_total_time_faiss_SIMD_smoothed_plot_ready.gp` | FAISS + hnswlib |
+| Backend-specific sweep | `experiments_scripts/{faiss,hnswlib}/run_main_qps_latency_sweep.py` | FAISS / hnswlib |
+| Difficulty drill-down | `final_experiments/02_drill_down/run_faiss_simd_24t.sh` | FAISS |
+| Offline calibration cost | `final_experiments/03_offline_cost/run_all_simd_24t.sh` | FAISS + hnswlib |
+| Ablation study | `final_experiments/04_ablation_study/run_all_faiss_glove_cohere_24t.sh` | FAISS |
+| Embedding-model effects | `final_experiments/05_embedding_model_effects/run_msmarco_embedding_models_faiss_24t.sh` | FAISS |
+| Index-quality study | `final_experiments/06_better_index_quality/run_faiss_simd_ndis_ef1024.py` | FAISS |
+| DARTH / Ada-EF target-0.99 | `final_experiments/07_darth_ada-ef/run_darth_adaef_cohere_msmarco_simd_target099.sh` | FAISS + hnswlib |
 
 ### Run the Main Eight-Dataset Sweep
 
@@ -296,8 +306,6 @@ final_experiments/01_main_results/main8_online24/{faiss,hnswlib}/final/offline_p
 cd $SAGE_ROOT/final_experiments/01_main_results/main8_online24/combined_faiss_SIMD
 gnuplot main8_recall_total_time_faiss_SIMD_smoothed_plot_ready.gp
 ```
-
-TODO: wire the final all8 plot-only wrapper into `plots/`.
 
 ## Running Individual Studies
 
@@ -391,15 +399,30 @@ The main combined result uses:
 - Ada-EF
 - DARTH
 
-The combined-plot workflow expects Ada-EF and DARTH result inputs in the paths
-documented by the plotting wrapper; regenerate them with the target-0.99 scripts
-when those files are absent. The main8 wrapper reruns only the SAGE and vanilla
-HNSW cells.
+Ada-EF and DARTH code is included in this repository. The final target-0.99
+wrappers live under `final_experiments/07_darth_ada-ef/`; Ada-EF's standalone
+runner is under `experiments_scripts/ada-ef/`, and the DARTH source tree is under
+`baselines/darth/benchmarking-darth/`.
 
-From-scratch target-0.99 baseline rerun scripts are in `final_experiments/07_darth_ada-ef/`.
-Lower-level wrappers are preserved under `experiments_scripts/ada-ef/` and
-`experiments_scripts/darth/`. Source-only DARTH and Ada-EF baseline code lives under
-`baselines/`; see `baselines/README.md` for provenance and build commands.
+Install baseline Python dependencies and build the binaries used by the final
+wrappers:
+
+```bash
+cd $SAGE_ROOT
+python3 -m pip install -r requirements-darth.txt
+python3 -m pip install -r requirements-adaef.txt
+
+cd $SAGE_ROOT/final_experiments/07_darth_ada-ef
+./scripts/build_darth_simd_avx512.sh
+./scripts/build_adaef_simd_avx512.sh
+python3 scripts/preflight_darth_adaef_cohere_msmarco.py
+```
+
+DARTH requires the Python `lightgbm` package and LightGBM headers. The build
+helper downloads the LightGBM source distribution for headers when needed; in an
+offline environment, pre-populate `LIGHTGBM_SRC_DIR` and `LIGHTGBM_LIB`. Ada-EF
+requires CMake, a C++17 compiler, OpenMP, HDF5 C++ libraries, Eigen3, and Boost
+headers; set `CONDA_PREFIX` if those headers live in a conda environment.
 
 ## Plotting Only
 
@@ -409,18 +432,6 @@ Regenerate the main combined plot from generated or artifact-provided CSV/JSON i
 cd $SAGE_ROOT/final_experiments/01_main_results/main8_online24/combined_faiss_SIMD
 gnuplot main8_recall_total_time_faiss_SIMD_smoothed_plot_ready.gp
 ```
-
-Regenerate FAISS analysis figures:
-
-```bash
-cd $SAGE_ROOT
-python3 final_analysis/regenerate_faiss_01_02.py
-```
-
-Additional submission-figure scripts live under:
-- `final_analysis/02_glove_cohere_target_recall_easy_hard_analysis/`
-- `final_analysis/04_lid_stratified_probe100_online_recall_cfr_reproducibility/`
-- `final_analysis/05_cfr_bin_difficulty_correlation_online_and_probe/`
 
 ## Validation
 
@@ -439,7 +450,7 @@ Run a smoke sweep on one dataset:
 ```bash
 python3 experiments_scripts/faiss/run_main_qps_latency_sweep.py \
     --base-path "$SAGE_DATA_DIR" \
-    --index-dir "$SAGE_INDEX_DIR" \
+    --index-dir "$SAGE_FAISS_INDEX_ROOT" \
     --faiss-python-path "$FAISS_PYTHON_PATH" \
     --datasets glove-100-angular.hdf5 \
     --ef-sweep 512,1024 \
@@ -451,15 +462,15 @@ python3 experiments_scripts/faiss/run_main_qps_latency_sweep.py \
     --no-skip-existing
 ```
 
-TODO: add expected smoke-test output ranges for recall and QPS after the
-artifact bundle is frozen.
+The smoke sweep writes a small FAISS result set under the runner default `run/`
+and `final/` directories.
 
 ## Citation
 
 ```bibtex
 @inproceedings{sage2026,
-  title     = {SAGE: Signal-driven Adaptive Greedy Early-stop},
-  author    = {TODO},
+  title     = {Query-Adaptive Early Termination via HNSW-Inherent Signals},
+  author    = {Kyungmin Kim and Dongseob Kim and Jihyo Jang and Joobo Shim and Jaeyoung Do and Sang-Won Lee},
   booktitle = {Proceedings of the VLDB Endowment},
   year      = {2026}
 }

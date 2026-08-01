@@ -72,7 +72,7 @@ DEFAULT_FAISS_PYTHON_PATH = Path(
 DEFAULT_FAISS_INDEX_ROOT = Path(
     os.environ.get(
         "SAGE_INDEX_DIR",
-        str(PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603/darth/index"),
+        str(PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603/index"),
     )
 )
 DEFAULT_PYTHON = Path(os.environ.get("SAGE_PYTHON", sys.executable))

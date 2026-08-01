@@ -14,7 +14,7 @@ RUN_ID="${SAGE_RUN_ID:-drilldown_faiss_SIMD_on_main8_24t}"
 DATA_DIR="${SAGE_DATA_DIR:-$REPO_ROOT/datasets}"
 INDEX_DIR="${SAGE_INDEX_DIR:-$REPO_ROOT/index}"
 FAISS_PYTHON="${FAISS_PYTHON_PATH:-$REPO_ROOT/faiss/build_sage_avx512/faiss/python}"
-FAISS_INDEX="${SAGE_FAISS_INDEX_ROOT:-${FAISS_INDEX_ROOT:-$INDEX_DIR/faiss_m32_efc500_main8_20260707/darth/index}}"
+FAISS_INDEX="${SAGE_FAISS_INDEX_ROOT:-${FAISS_INDEX_ROOT:-$INDEX_DIR/faiss_m32_efc500_main8_20260707/index}}"
 
 DIFF_DIR="$ROOT/$RUN_ID/difficulty_exactgt_24t"
 POLICY_DIR="$ROOT/$RUN_ID/policy_run"

@@ -12,7 +12,7 @@ Imported scope:
 - ablation search budget: `efSearch=1024`
 - index: `M=32`, `efConstruction=500`
 - threshold mode: `paper_floor_half`
-- default SAGE settings: `ncal=100`, `B=4`, `g=2`, `[4,16]`, `alpha=0.8`, `tmin_pops=25`
+- default SAGE settings: `ncal=100`, `B=4`, `g=2`, `[4,16]`, `alpha=0.8`
 
 Paper ablation cells:
 
@@ -73,5 +73,3 @@ Run both parts:
 ```bash
 ./run_all_faiss_glove_cohere_24t.sh
 ```
-
-`PAPER_TEX_CHECK.md` records the consistency check against the paper experiment section.

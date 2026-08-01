@@ -9,7 +9,7 @@ Configuration:
 - SIMD: hnswlib uses its `-march=native` build; FAISS uses the AVX-512 Python build and sets `FAISS_OPT_LEVEL=AVX512`
 - Thread settings: `main8_online24` uses 24 online/offline threads; `main8_online1` uses 1 online thread and 24 offline threads
 - Index: `M=32`, `efConstruction=500`
-- Search: `k=10`, `ncal=100`, `tmin_pops=25`
+- Search: `k=10`, `ncal=100`
 - Calibration: sampled 10,000-node LID pool, 1st--99th percentile trim, 100 LID-quantile probes
 - EF sweep: `64,80,96,128,160,192,256,320,384,512,640,768,896,1024`
 
@@ -26,7 +26,7 @@ Datasets:
 Environment variables:
 - `SAGE_DATA_DIR`: dataset HDF5 root. Defaults to `$SAGE_ROOT/datasets`.
 - `SAGE_INDEX_DIR`: hnswlib index root. Defaults to `<repo>/index`.
-- `SAGE_FAISS_INDEX_ROOT` or `FAISS_INDEX_ROOT`: FAISS HNSW index root. Defaults to `$SAGE_INDEX_DIR/faiss_m32_efc500_main8_20260707/darth/index`.
+- `SAGE_FAISS_INDEX_ROOT` or `FAISS_INDEX_ROOT`: FAISS HNSW index root. Defaults to `$SAGE_INDEX_DIR/faiss_m32_efc500_main8_20260707/index`.
 - `FAISS_PYTHON_PATH`: patched FAISS Python package. Defaults to `<repo>/faiss/build_sage_avx512/faiss/python`.
 - `SAGE_PYTHON`: Python executable for child cells. Defaults to the Python executable used to launch the runner.
 

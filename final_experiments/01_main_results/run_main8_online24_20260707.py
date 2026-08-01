@@ -41,7 +41,7 @@ FAISS_INDEX_ROOT = Path(
         "SAGE_FAISS_INDEX_ROOT",
         os.environ.get(
             "FAISS_INDEX_ROOT",
-            str(INDEX_DIR / "faiss_m32_efc500_main8_20260707/darth/index"),
+            str(INDEX_DIR / "faiss_m32_efc500_main8_20260707/index"),
         ),
     )
 ).expanduser()

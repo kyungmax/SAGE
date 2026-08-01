@@ -40,7 +40,7 @@ PROJECT_ROOT = Path("/home/kyungmin/vectordb/hnsw-playground")
 PAPERS_ROOT = PROJECT_ROOT / "trials_on_fixing_search_process/adaptive_efsearch/papers"
 DATASET_ROOT = PROJECT_ROOT / "datasets"
 COMMON_INDEX_ROOT = (
-    PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603/darth/index"
+    PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603/index"
 )
 DEFAULT_RUN_ROOT = (
     PROJECT_ROOT / "index/darth_m32_efc500_target095_paper_fromscratch"

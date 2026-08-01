@@ -45,7 +45,7 @@ Useful environment overrides:
 
 ```bash
 export SAGE_DATA_DIR=/path/to/datasets
-export SAGE_MSMARCO_EMBEDDING_FAISS_INDEX_ROOT=/path/to/index/msmarco_embedding_models_faiss_m32_efc500/darth/index
+export SAGE_MSMARCO_EMBEDDING_FAISS_INDEX_ROOT=/path/to/index/msmarco_embedding_models_faiss_m32_efc500/index
 export FAISS_PYTHON_PATH=/path/to/faiss/python
 export OUT_ROOT=$PWD/msmarco_embedding_models_faiss_SIMD_on_24t
 ```
@@ -69,5 +69,3 @@ Optional input-preparation helpers:
 - `scripts/download_msmarco_fasttext_model.sh`: download and unpack `cc.en.300.bin`.
 - `scripts/build_msmarco_fasttext_static_hdf5.sh`: build the mean-pooled FastText HDF5.
 - `scripts/make_msmarco_embedding_dev6980_subsets.py`: build dev-query subsets for precomputed BGE/Gemma MSMARCO embeddings.
-
-`PAPER_TEX_CHECK.md` records the paper-section consistency check for this imported scope.

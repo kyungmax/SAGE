@@ -1,0 +1,13 @@
+# Core Python dependencies for SAGE experiments and patched hnswlib builds.
+# Patched FAISS is built from ./faiss; do not install faiss-cpu for the main SAGE environment.
+numpy
+pandas
+scipy
+h5py
+matplotlib
+seaborn
+scikit-learn
+pytest
+pybind11
+setuptools
+wheel

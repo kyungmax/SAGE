@@ -38,7 +38,7 @@ CONDA_REEXEC_SENTINEL = "SAGE_FAISS_CONDA_REEXECED"
 DEFAULT_FAISS_INDEX_ROOT = Path(
     os.environ.get(
         "FAISS_INDEX_ROOT",
-        str(PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603/darth/index"),
+        str(PROJECT_ROOT / "index/m32_efc500_target095_adaef_darth_efs1000_20260603/index"),
     )
 )
 
@@ -150,7 +150,7 @@ def resolve_dataset_spec(dataset_name: str) -> DatasetSpec:
     if stem in DATASET_SPECS:
         return DATASET_SPECS[stem]
     raise KeyError(
-        f"No Faiss/DARTH index mapping for dataset={dataset_name!r}. "
+        f"No Faiss index mapping for dataset={dataset_name!r}. "
         "Add it to DATASET_SPECS or pass a known dataset."
     )
 
@@ -211,7 +211,7 @@ def build_original_index(
         / f"{spec.darth_name}.M{int(param_m)}.efC{int(ef_construction)}.index"
     )
     if not index_path.exists():
-        raise FileNotFoundError(f"Missing Faiss/DARTH index for {dataset_name}: {index_path}")
+        raise FileNotFoundError(f"Missing Faiss index for {dataset_name}: {index_path}")
 
     FaissSageIndex = import_faiss_index_class()
     dim = int(train.shape[1])

@@ -146,7 +146,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--index-dir",
         default=str(DEFAULT_FAISS_INDEX_ROOT),
-        help="Root containing Faiss/DARTH HNSW index subdirectories.",
+        help="Root containing Faiss HNSW index subdirectories.",
     )
     parser.add_argument(
         "--faiss-python-path",

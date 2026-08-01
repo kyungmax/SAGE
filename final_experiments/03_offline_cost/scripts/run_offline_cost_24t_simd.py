@@ -37,7 +37,7 @@ DEFAULT_HNSW_INDEX_DIR = Path(os.environ.get("SAGE_INDEX_DIR", str(DEFAULT_PROJE
 DEFAULT_FAISS_INDEX_ROOT = Path(
     os.environ.get(
         "SAGE_FAISS_INDEX_ROOT",
-        os.environ.get("FAISS_INDEX_ROOT", str(DEFAULT_PROJECT_ROOT / "index/faiss_m32_efc500_main8_20260707/darth/index")),
+        os.environ.get("FAISS_INDEX_ROOT", str(DEFAULT_PROJECT_ROOT / "index/faiss_m32_efc500_main8_20260707/index")),
     )
 ).expanduser()
 DEFAULT_HNSWLIB_EXTENSION_ROOT = Path(

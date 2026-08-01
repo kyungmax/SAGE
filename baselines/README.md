@@ -24,56 +24,55 @@ baselines/darth/benchmarking-darth/
 ```
 
 The patched DARTH C++ tree in `baselines/darth/benchmarking-darth/` is the
-metric-aware tree used by that session. Its previous `build-local/` directory was
-intentionally omitted.
+metric-aware tree used by that session. Generated build directories, model
+outputs, and run artifacts are intentionally omitted.
 
-Ada-EF source was copied from the same session bundle:
-
-```text
-baselines/ada-ef/
-```
-
-Its previous `runs/` directory was intentionally omitted.
+Ada-EF is available in two source copies: the final experiment uses
+`experiments_scripts/ada-ef/`, while `baselines/ada-ef/` is kept as a provenance
+snapshot. Generated Ada-EF run directories are intentionally omitted.
 
 ## Build DARTH
 
-Install Python dependencies in the environment used for DARTH reruns:
+Install the DARTH Python dependencies, then build the HNSW test binary and
+local FAISS shared library with AVX-512 flags:
 
 ```bash
-python3 -m pip install -r baselines/darth/benchmarking-darth/requirements.txt
-```
+cd $SAGE_ROOT
+python3 -m pip install -r requirements-darth.txt
 
-Build the DARTH HNSW test binary and local FAISS shared library:
-
-```bash
-cd baselines/darth/benchmarking-darth
-BUILD_DIR=build-local JOBS=24 ./build_hnsw_local.sh
+cd $SAGE_ROOT/final_experiments/07_darth_ada-ef
+./scripts/build_darth_simd_avx512.sh
 ```
 
 The expected binary after build is:
 
 ```text
-baselines/darth/benchmarking-darth/build-local/hnsw-test/hnsw_test
+baselines/darth/benchmarking-darth/build-simd-avx512/hnsw-test/hnsw_test
 ```
 
-`build_hnsw_local.sh` locates the installed Python `lightgbm` package and uses a
-LightGBM source distribution for headers. Override `LIGHTGBM_VERSION`,
-`LIGHTGBM_SRC_DIR`, `LIGHTGBM_LIB`, or `LIGHTGBM_INCLUDE_DIR` if the local
-environment differs.
+DARTH requires the Python `lightgbm` package and LightGBM headers. The build
+helper downloads the LightGBM source distribution for headers when needed; in an
+offline environment, set `LIGHTGBM_SRC_DIR`, `LIGHTGBM_LIB`, and related
+overrides explicitly.
 
 ## Build Ada-EF
 
 Ada-EF requires CMake, a C++17 compiler, OpenMP, HDF5 C++ libraries, Eigen3, and
-Boost headers. The helper script auto-detects common conda env locations when
-`CONDA_PREFIX` is unset.
+Boost headers. Install the Python wrapper dependencies, then build the standalone
+runner used by the target-0.99 comparison:
 
 ```bash
-cd baselines/ada-ef
-CONDA_PREFIX=/path/to/adaef ./scripts/build.sh
+cd $SAGE_ROOT
+python3 -m pip install -r requirements-adaef.txt
+
+cd $SAGE_ROOT/final_experiments/07_darth_ada-ef
+./scripts/build_adaef_simd_avx512.sh
 ```
 
 The expected binary after build is:
 
 ```text
-baselines/ada-ef/build/backend_runner
+experiments_scripts/ada-ef/build-simd-avx512/backend_runner
 ```
+
+Set `CONDA_PREFIX` if Eigen3, Boost, or HDF5 live in a conda environment.

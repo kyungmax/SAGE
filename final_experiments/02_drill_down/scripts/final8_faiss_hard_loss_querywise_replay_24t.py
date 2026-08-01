@@ -44,7 +44,7 @@ DEFAULT_FAISS_PYTHON_PATH = Path(
 DEFAULT_FAISS_INDEX_ROOT = Path(
     os.environ.get(
         "SAGE_FAISS_INDEX_ROOT",
-        os.environ.get("FAISS_INDEX_ROOT", str(DEFAULT_INDEX_DIR / "faiss_m32_efc500_main8_20260707/darth/index")),
+        os.environ.get("FAISS_INDEX_ROOT", str(DEFAULT_INDEX_DIR / "faiss_m32_efc500_main8_20260707/index")),
     )
 ).expanduser()
 

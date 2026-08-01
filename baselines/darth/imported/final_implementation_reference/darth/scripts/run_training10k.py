@@ -73,8 +73,8 @@ def training_queries(processed_dir: Path) -> int:
 
 
 def link_index(run_root: Path, darth_name: str) -> Path:
-    source = REUSE_ROOT / "darth/index" / darth_name / f"{darth_name}.M32.efC500.index"
-    target = run_root / "darth/index" / darth_name / f"{darth_name}.M32.efC500.index"
+    source = REUSE_ROOT / "index" / darth_name / f"{darth_name}.M32.efC500.index"
+    target = run_root / "index" / darth_name / f"{darth_name}.M32.efC500.index"
     ensure_symlink(target, source)
     return target
 

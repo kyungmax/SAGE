@@ -42,7 +42,7 @@ PATCHED_FAISS_LIB_DIR = Path(
 VERIFIED_FAISS_INDEX_ROOT = Path(
     os.environ.get(
         "SAGE_FAISS_INDEX_ROOT",
-        str(PROJECT_ROOT / "index/faiss_m32_efc500_main8_20260707/darth/index"),
+        str(PROJECT_ROOT / "index/faiss_m32_efc500_main8_20260707/index"),
     )
 ).expanduser()
 DEFAULT_RUN_ROOT = PROJECT_ROOT / "index/darth_m32_efc500_target099_main4"

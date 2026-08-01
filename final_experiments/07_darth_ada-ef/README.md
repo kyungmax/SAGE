@@ -13,13 +13,21 @@ Imported scope:
 - online latency threads: 1, matching the paper text
 - query scope: full HDF5 `test` set (`cohere=1000`, `msmarco=6980` when the paper datasets are present)
 
-Build the local SIMD binaries if they are missing:
+Install baseline Python dependencies and build the local SIMD binaries if they
+are missing:
 
 ```bash
+cd $SAGE_ROOT
+python3 -m pip install -r requirements-darth.txt
+python3 -m pip install -r requirements-adaef.txt
+
 cd $SAGE_ROOT/final_experiments/07_darth_ada-ef
 ./scripts/build_darth_simd_avx512.sh
 ./scripts/build_adaef_simd_avx512.sh
 ```
+
+`requirements-darth.txt` deliberately excludes `faiss-cpu`; use the patched FAISS
+build from this repository via `FAISS_PYTHON_PATH`.
 
 Run preflight:
 
@@ -62,5 +70,3 @@ Primary outputs:
 - `darth_target099_simd_cohere_msmarco_fullquery/summary/darth_target099_simd_fullquery_summary.csv`
 - `adaef_target099_simd_cohere_msmarco_fullquery/adaef/results/offline_cost_summary.csv`
 - per-dataset wrapper JSONs under each result tree.
-
-`PAPER_TEX_CHECK.md` records the consistency check against the paper experiment section.

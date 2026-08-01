@@ -28,7 +28,7 @@ DEFAULT_DATASET_DIR = Path(os.environ.get("SAGE_DATA_DIR", str(DEFAULT_PROJECT_R
 DEFAULT_INDEX_ROOT = Path(
     os.environ.get(
         "SAGE_MSMARCO_EMBEDDING_FAISS_INDEX_ROOT",
-        str(DEFAULT_PROJECT_ROOT / "index/msmarco_embedding_models_faiss_m32_efc500/darth/index"),
+        str(DEFAULT_PROJECT_ROOT / "index/msmarco_embedding_models_faiss_m32_efc500/index"),
     )
 ).expanduser()
 DEFAULT_FAISS_PYTHON_PATH = Path(

@@ -38,10 +38,10 @@ DEFAULT_INDEX_DIR = Path(os.environ.get("SAGE_INDEX_DIR", str(DEFAULT_PROJECT_RO
 DEFAULT_M32_INDEX_ROOT = Path(
     os.environ.get(
         "SAGE_FAISS_INDEX_ROOT",
-        os.environ.get("FAISS_INDEX_ROOT", str(DEFAULT_INDEX_DIR / "faiss_m32_efc500_main8_20260707/darth/index")),
+        os.environ.get("FAISS_INDEX_ROOT", str(DEFAULT_INDEX_DIR / "faiss_m32_efc500_main8_20260707/index")),
     )
 ).expanduser()
-DEFAULT_INDEX_ROOT_BASE = DEFAULT_INDEX_DIR / "faiss_graph_quality_ndis/darth/index"
+DEFAULT_INDEX_ROOT_BASE = DEFAULT_INDEX_DIR / "faiss_graph_quality_ndis/index"
 DEFAULT_POLICY_CSV = ROOT / "policy_source" / "combined_faiss_main_qps_latency_sweep.csv"
 DEFAULT_OUT_DIR = ROOT / "faiss_simd_ndis_ef1024"
 DEFAULT_EFS = (1024,)
