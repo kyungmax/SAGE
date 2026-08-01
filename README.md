@@ -1,4 +1,4 @@
-# SAGE Artifact: Query-Adaptive Early Termination via HNSW-Inherent Signals
+# SAGE: Query-Adaptive Early Termination via HNSW-Inherent Signals
 
 ## Overview
 
