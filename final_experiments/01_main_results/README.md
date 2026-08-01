@@ -1,7 +1,7 @@
 # Main Results
 
 This directory contains script-only launchers for the main eight-dataset SAGE
-experiment. Generated CSVs, plots, logs, caches, and prebuilt indexes are not
+experiment. Generated CSVs, logs, caches, and prebuilt indexes are not
 committed here.
 
 Configuration:

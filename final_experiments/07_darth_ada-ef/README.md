@@ -1,10 +1,11 @@
 # 07 DARTH / Ada-EF Scripts
 
-This directory contains script-only artifacts for the paper SOTA comparison against DARTH and Ada-EF. It intentionally excludes generated JSONs, logs, model files, indexes, build directories, plots, and old broad-scope reruns.
+This directory contains script-only artifacts for the paper SOTA comparison against DARTH and Ada-EF. It intentionally excludes generated JSONs, logs, model files, indexes, build directories, and old broad-scope reruns.
 
 Imported scope:
 
 - datasets: `cohere-768-angular.hdf5` and `msmarco-v1-openai-ada2-full-ip.hdf5`
+- data sources: [Cohere Wikipedia embeddings](https://huggingface.co/datasets/Cohere/wikipedia-22-12-en-embeddings) with [HDF5 mirror](https://huggingface.co/datasets/hhy3/ann-datasets/tree/main), and the public [MS MARCO Passage Ranking Dataset](https://microsoft.github.io/msmarco/) with [Pyserini MS MARCO OpenAI ada2 corpus FAISS index](https://rgw.cs.uwaterloo.ca/pyserini/indexes/faiss/faiss-flat.msmarco-v1-passage.openai-ada2.20230530.e3a58f.tar.gz) plus Pyserini cached dev queries
 - target recall: `0.99`
 - DARTH backend: FAISS, `efSearch=1000`, `M=32`, `efConstruction=500`
 - Ada-EF backend: hnswlib, `M=32`, `efConstruction=500`

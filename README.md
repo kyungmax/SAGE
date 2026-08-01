@@ -94,7 +94,7 @@ Use the underlying runner subcommands through the same wrapper when needed:
 ## Software Dependencies
 
 SAGE uses patched CPU FAISS and hnswlib builds with Python bindings, plus
-Python utilities for calibration, benchmarking, and plotting.
+Python utilities for calibration and benchmarking.
 
 ```bash
 sudo apt-get update
@@ -102,8 +102,7 @@ sudo apt-get install -y \
     build-essential cmake g++ make swig pkg-config \
     python3 python3-dev python3-pip \
     libopenblas-dev libomp-dev libhdf5-dev \
-    libeigen3-dev libboost-all-dev \
-    gnuplot
+    libeigen3-dev libboost-all-dev
 
 python3 -m pip install -r requirements.txt
 ```
@@ -197,19 +196,25 @@ To keep large files outside the repository, export `SAGE_DATA_DIR` or
 
 The main paper experiments use eight HDF5 datasets with `train`, `test`, and
 `neighbors` arrays. Download or prepare the HDF5 files under `SAGE_DATA_DIR`.
-The author-provided artifact bundle will include custom datasets/indexes that do
-not have a stable public HDF5 source.
+The public sources are listed below using the dataset names from the paper. The
+scripts still expect the HDF5 filenames listed in the main sweep command.
 
-| Dataset file | Size | Dim | Metric | Source |
-|--------------|------|-----|--------|--------|
-| `glove-100-angular.hdf5` | 1.18M | 100 | angular | [ANN-Benchmarks HDF5](https://ann-benchmarks.com/glove-100-angular.hdf5) |
-| `nytimes-256-angular.hdf5` | 290K | 256 | angular | [ANN-Benchmarks HDF5](https://ann-benchmarks.com/nytimes-256-angular.hdf5) |
-| `msmarco-v1-openai-ada2-full-ip.hdf5` | 8.84M | 1536 | inner product | Author-provided MSMARCO embedding artifact |
-| `msspacev-100M-i8-euclidean.hdf5` | 100M | 100 | Euclidean | [SpaceV 100M source](https://huggingface.co/datasets/unum-cloud/ann-spacev-100m); convert to the expected HDF5 layout |
-| `cohere-768-angular.hdf5` | 10M | 768 | angular | Author-provided CohereWiki artifact |
-| `youtube-15M-angular.hdf5` | 15M | 1024 | angular | Author-provided YouTube artifact/index bundle |
-| `agnews-mxbai-1024-euclidean.hdf5` | 769K | 1024 | Euclidean | [VIBE dataset bundle](https://huggingface.co/datasets/vector-index-bench/vibe) |
-| `landmark-nomic-768-angular.hdf5` | 761K | 768 | angular | [VIBE `landmark-nomic-768-normalized.hdf5`](https://huggingface.co/datasets/vector-index-bench/vibe); save or symlink as the expected filename |
+The author-provided Google Drive folder is for converted inputs that are not
+direct public HDF5 downloads: the YouTube HDF5 used in the main benchmark and
+the non-ada MSMARCO embedding variants used in the embedding-model effects study
+(GloVe, FastText, BGE-M3, and EmbeddingGemma):
+[SAGE data artifacts](https://drive.google.com/drive/folders/12tu88Hx0D4BYGeIzqqbG60bzov57fyKb?usp=sharing).
+
+| Datasets | Size | Dim | Metric | Source |
+|----------|------|-----|--------|--------|
+| `NYTimes` | 290K | 256 | angular | [ANN-Benchmarks HDF5](https://ann-benchmarks.com/nytimes-256-angular.hdf5) |
+| `GloVe100` | 1.18M | 100 | angular | [ANN-Benchmarks HDF5](https://ann-benchmarks.com/glove-100-angular.hdf5) |
+| `AGNews` | 769K | 1024 | L2 | [VIBE dataset bundle](https://huggingface.co/datasets/vector-index-bench/vibe) |
+| `Landmark` | 761K | 768 | angular | [VIBE dataset bundle](https://huggingface.co/datasets/vector-index-bench/vibe); use `landmark-nomic-768-normalized.hdf5` as `landmark-nomic-768-angular.hdf5` |
+| `CohereWiki` | 10M | 768 | angular | [Cohere Wikipedia embeddings](https://huggingface.co/datasets/Cohere/wikipedia-22-12-en-embeddings); HDF5 mirror: [Hugging Face `hhy3/ann-datasets`](https://huggingface.co/datasets/hhy3/ann-datasets/tree/main) |
+| `YouTube` | 15M | 1024 | angular | [SeahorseDB YouTube source](https://huggingface.co/datasets/dnotitia/SeahorseDB-dataset/tree/main); converted HDF5 in the SAGE data artifacts |
+| `MSMARCOV1` | 8.84M | 1536 | IP | [MS MARCO Passage Ranking Dataset](https://microsoft.github.io/msmarco/) with [Pyserini OpenAI ada2 corpus index](https://rgw.cs.uwaterloo.ca/pyserini/indexes/faiss/faiss-flat.msmarco-v1-passage.openai-ada2.20230530.e3a58f.tar.gz) and cached dev queries; convert to the expected HDF5 layout |
+| `SpaceV` | 100M | 100 | L2 | [SPACEV1B source](https://github.com/microsoft/SPTAG/tree/main/datasets/SPACEV1B); convert to the expected HDF5 layout |
 
 Prebuilt indexes from the SAGE artifact bundle should be copied or extracted
 into `index/`. To keep them elsewhere, set `SAGE_INDEX_DIR`,
@@ -229,8 +234,8 @@ by `experiments_scripts/hnswlib/hnsw_index_utils.py`, for example:
 index/glove-100-angular_M32_M32_efC500_n1183514_dim100
 ```
 
-Large HDF5 datasets, index files, generated CSV files, plots, raw logs, and
-cache directories should not be committed to git.
+Large HDF5 datasets, index files, generated CSV files, raw logs, and cache
+directories should not be committed to git.
 
 ## SAGE Configuration
 
@@ -254,7 +259,6 @@ expected generated artifacts, not source files to maintain in git.
 | Experiment | Driver | Backend |
 |------------|--------|---------|
 | Main eight-dataset sweep | `final_experiments/01_main_results/main8_online24/run_all.sh` | FAISS + hnswlib |
-| Main plotting | `final_experiments/01_main_results/main8_online24/combined_faiss_SIMD/main8_recall_total_time_faiss_SIMD_smoothed_plot_ready.gp` | FAISS + hnswlib |
 | Backend-specific sweep | `experiments_scripts/{faiss,hnswlib}/run_main_qps_latency_sweep.py` | FAISS / hnswlib |
 | Difficulty drill-down | `final_experiments/02_drill_down/run_faiss_simd_24t.sh` | FAISS |
 | Offline calibration cost | `final_experiments/03_offline_cost/run_all_simd_24t.sh` | FAISS + hnswlib |
@@ -300,12 +304,6 @@ final_experiments/01_main_results/main8_online24/{faiss,hnswlib}/final/offline_r
 final_experiments/01_main_results/main8_online24/{faiss,hnswlib}/final/offline_predicted_recall_curve.csv
 ```
 
-### Build the Combined Main Plot
-
-```bash
-cd $SAGE_ROOT/final_experiments/01_main_results/main8_online24/combined_faiss_SIMD
-gnuplot main8_recall_total_time_faiss_SIMD_smoothed_plot_ready.gp
-```
 
 ## Running Individual Studies
 
@@ -424,14 +422,6 @@ offline environment, pre-populate `LIGHTGBM_SRC_DIR` and `LIGHTGBM_LIB`. Ada-EF
 requires CMake, a C++17 compiler, OpenMP, HDF5 C++ libraries, Eigen3, and Boost
 headers; set `CONDA_PREFIX` if those headers live in a conda environment.
 
-## Plotting Only
-
-Regenerate the main combined plot from generated or artifact-provided CSV/JSON inputs:
-
-```bash
-cd $SAGE_ROOT/final_experiments/01_main_results/main8_online24/combined_faiss_SIMD
-gnuplot main8_recall_total_time_faiss_SIMD_smoothed_plot_ready.gp
-```
 
 ## Validation
 

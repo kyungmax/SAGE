@@ -1,6 +1,6 @@
 # 05 Embedding Model Effects Scripts
 
-This directory contains script-only artifacts for the MSMARCO embedding-model experiment. It intentionally excludes generated CSVs, logs, indexes, caches, plots, and unrelated exploratory runs from the old experiment tree.
+This directory contains script-only artifacts for the MSMARCO embedding-model experiment. It intentionally excludes generated CSVs, logs, indexes, caches, and unrelated exploratory runs from the old experiment tree.
 
 Imported scope:
 
@@ -23,6 +23,8 @@ msmarco-v1-openai-ada2-full-ip.hdf5
 marco_embeddings/msmarco-v1-bge-m3-fp32-dev6980-ip.hdf5
 marco_embeddings/msmarco-v1-embeddinggemma-300m-fp32-dev6980-ip.hdf5
 ```
+
+The OpenAI ada2 file can be prepared from the public [MS MARCO Passage Ranking Dataset](https://microsoft.github.io/msmarco/) with the [Pyserini MS MARCO OpenAI ada2 corpus FAISS index](https://rgw.cs.uwaterloo.ca/pyserini/indexes/faiss/faiss-flat.msmarco-v1-passage.openai-ada2.20230530.e3a58f.tar.gz) and Pyserini cached dev queries. The GloVe, FastText, BGE-M3, and EmbeddingGemma HDF5 files are provided in the [SAGE data artifacts](https://drive.google.com/drive/folders/12tu88Hx0D4BYGeIzqqbG60bzov57fyKb?usp=sharing).
 
 Run a preflight check before the full sweep:
 

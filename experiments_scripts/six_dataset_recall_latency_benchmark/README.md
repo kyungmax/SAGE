@@ -3,8 +3,8 @@
 This directory contains the experiment-script run/build scripts for the six-dataset combined recall-latency result.
 
 Scripts:
-- `run_combined_recall_latency_six.py`: runs missing hnswlib/Faiss final sweeps, then rebuilds the combined outputs.
-- `build_combined_recall_latency_six.py`: rebuilds only the combined CSV/PNG/PDF from existing sweep CSVs.
+- `run_combined_recall_latency_six.py`: runs missing hnswlib/Faiss final sweeps, then rebuilds the combined artifacts.
+- `build_combined_recall_latency_six.py`: rebuilds only the combined artifacts from existing sweep CSVs.
 
 Outputs are written under:
 
@@ -19,10 +19,3 @@ Run:
 ```bash
 python3 experiments_scripts/six_dataset_recall_latency_benchmark/run_combined_recall_latency_six.py
 ```
-
-Only rebuild the combined plot:
-
-```bash
-python3 experiments_scripts/six_dataset_recall_latency_benchmark/run_combined_recall_latency_six.py --mode combine-only
-```
-
