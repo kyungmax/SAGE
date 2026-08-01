@@ -41,12 +41,7 @@ def _faiss_num_threads(num_threads: int | None) -> Iterator[None]:
             faiss.omp_set_num_threads(int(prev_threads))
 
 
-
 CFR_EMA_DECAY = 0.8
-CFR_EMA_UPDATE = 1.0 - CFR_EMA_DECAY
-
-
-
 
 
 def _selector_from_filter(filter_arg):
@@ -94,6 +89,75 @@ class Index:
             faiss.normalize_L2(vectors)
         return vectors
 
+    def _effective_threads(self, num_threads: int) -> int:
+        return self._num_threads if int(num_threads) <= 0 else int(num_threads)
+
+    def _require_native_method(self, name: str, instrumentation: str):
+        method = getattr(self._require_index(), name, None)
+        if method is None:
+            raise RuntimeError(
+                f"Current Faiss build does not expose native {name}(). "
+                f"Rebuild/install Faiss with SAGE {instrumentation}."
+            )
+        return method
+
+    @staticmethod
+    def _resolve_optional_ef_arg(
+        method_name: str,
+        args: tuple[Any, ...],
+        ef: int | None,
+    ) -> int:
+        if args:
+            if len(args) > 1:
+                raise TypeError(
+                    f"{method_name} accepts at most one positional argument after data."
+                )
+            if ef is not None:
+                raise TypeError("ef was provided both positionally and by keyword.")
+            ef = int(args[0])
+        if ef is None:
+            raise TypeError("Missing required argument: ef")
+        return int(ef)
+
+    def _adaptive_light_kwargs(
+        self,
+        *,
+        k: int,
+        ef_init: int,
+        enable_stop: bool,
+        num_threads: int,
+        filter,
+        early_stop_ratio: float,
+        tmin_pops: int,
+        classify_start: int,
+        classify_end: int,
+        cfr_ema_decay: float,
+        super_easy_gamma_ratio: float | None = None,
+        mid_easy_upper_gamma_ratio: float | None = None,
+        paper_bucket_count: int | None = None,
+        bucket_gamma_ratios=(),
+    ) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {
+            "k": int(k),
+            "ef_init": int(ef_init),
+            "enable_stop": bool(enable_stop),
+            "num_threads": self._effective_threads(num_threads),
+            "filter": filter,
+            "early_stop_ratio": float(early_stop_ratio),
+            "tmin_pops": int(tmin_pops),
+            "classify_start": int(classify_start),
+            "classify_end": int(classify_end),
+            "cfr_ema_decay": float(cfr_ema_decay),
+        }
+        if super_easy_gamma_ratio is not None:
+            kwargs["super_easy_gamma_ratio"] = float(super_easy_gamma_ratio)
+        if mid_easy_upper_gamma_ratio is not None:
+            kwargs["mid_easy_upper_gamma_ratio"] = float(mid_easy_upper_gamma_ratio)
+        if paper_bucket_count is not None:
+            kwargs["paper_bucket_count"] = int(paper_bucket_count)
+            kwargs["bucket_gamma_ratios"] = list(bucket_gamma_ratios)
+        return kwargs
+
     def set_num_threads(self, num_threads: int) -> None:
         self._num_threads = int(num_threads)
 
@@ -139,7 +203,7 @@ class Index:
                 raise NotImplementedError(
                     "Faiss SAGE backend currently supports only sequential ids."
                 )
-        with _faiss_num_threads(self._num_threads if num_threads <= 0 else num_threads):
+        with _faiss_num_threads(self._effective_threads(num_threads)):
             index.add(vectors)
         self._cached_lids = None
 
@@ -197,7 +261,7 @@ class Index:
         params.efSearch = int(index.hnsw.efSearch)
         params.sel = selector
 
-        with _faiss_num_threads(self._num_threads if num_threads <= 0 else num_threads):
+        with _faiss_num_threads(self._effective_threads(num_threads)):
             distances, labels = index.search(vectors, int(k), params=params)
 
         if self._metric == faiss.METRIC_INNER_PRODUCT:
@@ -206,19 +270,17 @@ class Index:
         return labels, distances
 
     def knn_query_hide_node(self, data, k: int, hide_labels, num_threads: int = -1, filter=None):
-        native_method = getattr(self._require_index(), "knn_query_hide_node", None)
-        if native_method is None:
-            raise RuntimeError(
-                "Current Faiss build does not expose native knn_query_hide_node(). "
-                "Rebuild/install Faiss with SAGE hide-node instrumentation."
-            )
+        native_method = self._require_native_method(
+            "knn_query_hide_node",
+            "hide-node instrumentation",
+        )
         vectors = self._prepare_vectors(data)
         hidden = np.asarray(hide_labels, dtype=np.int64)
         return native_method(
             vectors,
             hidden,
             k=int(k),
-            num_threads=self._num_threads if num_threads <= 0 else int(num_threads),
+            num_threads=self._effective_threads(num_threads),
             filter=filter,
         )
 
@@ -238,21 +300,27 @@ class Index:
         classify_end: int = 16,
         cfr_ema_decay: float = CFR_EMA_DECAY,
     ):
+        native_method = self._require_native_method(
+            "knn_query_adaptive_light",
+            "adaptive-light instrumentation",
+        )
         vectors = self._prepare_vectors(data)
-        return self._require_index().knn_query_adaptive_light(
+        return native_method(
             vectors,
-            k=int(k),
-            ef_init=int(ef_init),
-            enable_stop=bool(enable_stop),
-            num_threads=self._num_threads if num_threads <= 0 else int(num_threads),
-            early_stop_ratio=float(early_stop_ratio),
-            tmin_pops=int(tmin_pops),
-            super_easy_gamma_ratio=float(super_easy_gamma_ratio),
-            mid_easy_upper_gamma_ratio=float(mid_easy_upper_gamma_ratio),
-            classify_start=int(classify_start),
-            classify_end=int(classify_end),
-            cfr_ema_decay=float(cfr_ema_decay),
-            filter=filter,
+            **self._adaptive_light_kwargs(
+                k=k,
+                ef_init=ef_init,
+                enable_stop=enable_stop,
+                num_threads=num_threads,
+                filter=filter,
+                early_stop_ratio=early_stop_ratio,
+                tmin_pops=tmin_pops,
+                super_easy_gamma_ratio=super_easy_gamma_ratio,
+                mid_easy_upper_gamma_ratio=mid_easy_upper_gamma_ratio,
+                classify_start=classify_start,
+                classify_end=classify_end,
+                cfr_ema_decay=cfr_ema_decay,
+            ),
         )
 
     def knn_query_adaptive_light_pre_frontier(
@@ -271,31 +339,42 @@ class Index:
         classify_end: int = 16,
         cfr_ema_decay: float = CFR_EMA_DECAY,
     ):
+        native_method = self._require_native_method(
+            "knn_query_adaptive_light_pre_frontier",
+            "pre-frontier adaptive-light instrumentation",
+        )
         vectors = self._prepare_vectors(data)
-        return self._require_index().knn_query_adaptive_light_pre_frontier(
+        return native_method(
             vectors,
-            k=int(k),
-            ef_init=int(ef_init),
-            enable_stop=bool(enable_stop),
-            num_threads=self._num_threads if num_threads <= 0 else int(num_threads),
-            early_stop_ratio=float(early_stop_ratio),
-            tmin_pops=int(tmin_pops),
-            super_easy_gamma_ratio=float(super_easy_gamma_ratio),
-            mid_easy_upper_gamma_ratio=float(mid_easy_upper_gamma_ratio),
-            classify_start=int(classify_start),
-            classify_end=int(classify_end),
-            cfr_ema_decay=float(cfr_ema_decay),
-            filter=filter,
+            **self._adaptive_light_kwargs(
+                k=k,
+                ef_init=ef_init,
+                enable_stop=enable_stop,
+                num_threads=num_threads,
+                filter=filter,
+                early_stop_ratio=early_stop_ratio,
+                tmin_pops=tmin_pops,
+                super_easy_gamma_ratio=super_easy_gamma_ratio,
+                mid_easy_upper_gamma_ratio=mid_easy_upper_gamma_ratio,
+                classify_start=classify_start,
+                classify_end=classify_end,
+                cfr_ema_decay=cfr_ema_decay,
+            ),
         )
 
     def _paper_bucket_query_method(self, *, pre_frontier: bool = False):
-        index = self._require_index()
         if pre_frontier:
-            return index.knn_query_adaptive_light_paper_bucket_pre_frontier
-        method = getattr(index, "knn_query_sage", None)
+            return self._require_native_method(
+                "knn_query_adaptive_light_paper_bucket_pre_frontier",
+                "pre-frontier paper-bucket adaptive-light instrumentation",
+            )
+        method = getattr(self._require_index(), "knn_query_sage", None)
         if method is not None:
             return method
-        return index.knn_query_adaptive_light_paper_bucket
+        return self._require_native_method(
+            "knn_query_adaptive_light_paper_bucket",
+            "paper-bucket adaptive-light instrumentation",
+        )
 
     def knn_query_adaptive_light_paper_bucket(
         self,
@@ -316,18 +395,20 @@ class Index:
         vectors = self._prepare_vectors(data)
         return self._paper_bucket_query_method()(
             vectors,
-            k=int(k),
-            ef_init=int(ef_init),
-            enable_stop=bool(enable_stop),
-            num_threads=self._num_threads if num_threads <= 0 else int(num_threads),
-            filter=filter,
-            early_stop_ratio=float(early_stop_ratio),
-            tmin_pops=int(tmin_pops),
-            paper_bucket_count=int(paper_bucket_count),
-            bucket_gamma_ratios=list(bucket_gamma_ratios),
-            classify_start=int(classify_start),
-            classify_end=int(classify_end),
-            cfr_ema_decay=float(cfr_ema_decay),
+            **self._adaptive_light_kwargs(
+                k=k,
+                ef_init=ef_init,
+                enable_stop=enable_stop,
+                num_threads=num_threads,
+                filter=filter,
+                early_stop_ratio=early_stop_ratio,
+                tmin_pops=tmin_pops,
+                paper_bucket_count=paper_bucket_count,
+                bucket_gamma_ratios=bucket_gamma_ratios,
+                classify_start=classify_start,
+                classify_end=classify_end,
+                cfr_ema_decay=cfr_ema_decay,
+            ),
         )
 
     def knn_query_adaptive_light_paper_bucket_pre_frontier(
@@ -349,18 +430,20 @@ class Index:
         vectors = self._prepare_vectors(data)
         return self._paper_bucket_query_method(pre_frontier=True)(
             vectors,
-            k=int(k),
-            ef_init=int(ef_init),
-            enable_stop=bool(enable_stop),
-            num_threads=self._num_threads if num_threads <= 0 else int(num_threads),
-            filter=filter,
-            early_stop_ratio=float(early_stop_ratio),
-            tmin_pops=int(tmin_pops),
-            paper_bucket_count=int(paper_bucket_count),
-            bucket_gamma_ratios=list(bucket_gamma_ratios),
-            classify_start=int(classify_start),
-            classify_end=int(classify_end),
-            cfr_ema_decay=float(cfr_ema_decay),
+            **self._adaptive_light_kwargs(
+                k=k,
+                ef_init=ef_init,
+                enable_stop=enable_stop,
+                num_threads=num_threads,
+                filter=filter,
+                early_stop_ratio=early_stop_ratio,
+                tmin_pops=tmin_pops,
+                paper_bucket_count=paper_bucket_count,
+                bucket_gamma_ratios=bucket_gamma_ratios,
+                classify_start=classify_start,
+                classify_end=classify_end,
+                cfr_ema_decay=cfr_ema_decay,
+            ),
         )
 
     def knn_query_adaptive_analysis_paper_bucket(
@@ -380,35 +463,27 @@ class Index:
         classify_end: int = 16,
         cfr_ema_decay: float = CFR_EMA_DECAY,
     ):
-        native_method = getattr(
-            self._require_index(),
+        native_method = self._require_native_method(
             "knn_query_adaptive_analysis_paper_bucket",
-            None,
+            "analysis instrumentation",
         )
-        if native_method is None:
-            raise RuntimeError(
-                "Current Faiss build does not expose native "
-                "knn_query_adaptive_analysis_paper_bucket(). Rebuild Faiss with "
-                "the SAGE analysis instrumentation."
-            )
-
-        vectors = self._prepare_vectors(data)
-        return native_method(
-            vectors,
-            k=int(k),
-            ef_init=int(ef_init),
-            ef_max=None if ef_max is None else int(ef_max),
-            enable_stop=bool(enable_stop),
-            num_threads=self._num_threads if num_threads <= 0 else int(num_threads),
+        kwargs = self._adaptive_light_kwargs(
+            k=k,
+            ef_init=ef_init,
+            enable_stop=enable_stop,
+            num_threads=num_threads,
             filter=filter,
-            early_stop_ratio=float(early_stop_ratio),
-            tmin_pops=int(tmin_pops),
-            paper_bucket_count=int(paper_bucket_count),
-            bucket_gamma_ratios=list(bucket_gamma_ratios),
-            classify_start=int(classify_start),
-            classify_end=int(classify_end),
-            cfr_ema_decay=float(cfr_ema_decay),
+            early_stop_ratio=early_stop_ratio,
+            tmin_pops=tmin_pops,
+            paper_bucket_count=paper_bucket_count,
+            bucket_gamma_ratios=bucket_gamma_ratios,
+            classify_start=classify_start,
+            classify_end=classify_end,
+            cfr_ema_decay=cfr_ema_decay,
         )
+        kwargs["ef_max"] = None if ef_max is None else int(ef_max)
+        vectors = self._prepare_vectors(data)
+        return native_method(vectors, **kwargs)
 
     def knn_query_sage(self, *args, **kwargs):
         return self.knn_query_adaptive_light_paper_bucket(*args, **kwargs)
@@ -428,17 +503,15 @@ class Index:
         ids = np.asarray(ids, dtype=np.int64).reshape(-1)
         if ids.size == 0:
             return np.empty((0,), dtype=np.float32)
-        native_method = getattr(self._require_index(), "compute_internal_lids", None)
-        if native_method is None:
-            raise RuntimeError(
-                "Current Faiss build does not expose native compute_internal_lids(). "
-                "Rebuild/install Faiss with SAGE LID instrumentation."
-            )
+        native_method = self._require_native_method(
+            "compute_internal_lids",
+            "LID instrumentation",
+        )
         return np.asarray(
             native_method(
                 ids,
                 k_lid=int(k_lid),
-                num_threads=self._num_threads if num_threads <= 0 else int(num_threads),
+                num_threads=self._effective_threads(num_threads),
             ),
             dtype=np.float32,
         )
@@ -447,7 +520,7 @@ class Index:
         total = self.get_current_count()
         lids = np.full(total, np.nan, dtype=np.float32)
         batch_size = 4096
-        effective_threads = self._num_threads if num_threads <= 0 else int(num_threads)
+        effective_threads = self._effective_threads(num_threads)
         for start in range(0, total, batch_size):
             stop = min(start + batch_size, total)
             batch_ids = np.arange(start, stop, dtype=np.int64)
@@ -476,7 +549,7 @@ class Index:
         sample_size = max(int(min_sample_size), int(math.ceil(total * float(sample_fraction))))
         sample_size = min(sample_size, total)
         rng = np.random.default_rng(int(random_seed))
-        effective_threads = self._num_threads if num_threads <= 0 else int(num_threads)
+        effective_threads = self._effective_threads(num_threads)
 
         seen: set[int] = set()
         finite_query_ids: list[np.ndarray] = []
@@ -566,18 +639,10 @@ class Index:
         num_threads: int = -1,
         filter=None,
     ):
-        native_method = getattr(
-            self._require_index(),
+        native_method = self._require_native_method(
             "knn_query_beam_width_first_target_hit_step",
-            None,
+            "first-hit instrumentation before running drilldown",
         )
-        if native_method is None:
-            raise RuntimeError(
-                "Current Faiss build does not expose native "
-                "knn_query_beam_width_first_target_hit_step(). Rebuild Faiss with "
-                "the SAGE first-hit instrumentation before running drilldown."
-            )
-
         vectors = self._prepare_vectors(data)
         return native_method(
             vectors,
@@ -588,7 +653,7 @@ class Index:
             switch_pop=int(switch_pop),
             switch_full_pop=int(switch_full_pop),
             ef_after=int(ef_after),
-            num_threads=self._num_threads if num_threads <= 0 else int(num_threads),
+            num_threads=self._effective_threads(num_threads),
             filter=filter,
         )
 
@@ -647,19 +712,17 @@ class Index:
         hide_labels=None,
         num_threads: int = -1,
     ) -> tuple[list[list[dict[str, Any]]], int, list[float]]:
-        native_method = getattr(self._require_index(), "search_layer0_trace", None)
-        if native_method is None:
-            raise RuntimeError(
-                "Current Faiss build does not expose native search_layer0_trace(). "
-                "Rebuild/install Faiss with SAGE trace instrumentation."
-            )
+        native_method = self._require_native_method(
+            "search_layer0_trace",
+            "trace instrumentation",
+        )
         vectors = self._prepare_vectors(data)
         trace = native_method(
             vectors,
             k=int(k),
             ef=int(ef),
             hide_labels=None if hide_labels is None else np.asarray(hide_labels, dtype=np.int64),
-            num_threads=self._num_threads if num_threads <= 0 else int(num_threads),
+            num_threads=self._effective_threads(num_threads),
         )
         trace["ef"] = int(ef)
         return self._native_trace_to_paths(trace)
@@ -682,19 +745,17 @@ class Index:
             if pre_frontier
             else "search_layer0_cfr_summary"
         )
-        native_method = getattr(self._require_index(), native_name, None)
-        if native_method is None:
-            raise RuntimeError(
-                f"Current Faiss build does not expose native {native_name}(). "
-                "Rebuild/install Faiss with SAGE CFR summary instrumentation."
-            )
+        native_method = self._require_native_method(
+            native_name,
+            "CFR summary instrumentation",
+        )
         vectors = self._prepare_vectors(data)
         return native_method(
             vectors,
             k=int(k),
             ef=int(ef),
             hide_labels=None if hide_labels is None else np.asarray(hide_labels, dtype=np.int64),
-            num_threads=self._num_threads if num_threads <= 0 else int(num_threads),
+            num_threads=self._effective_threads(num_threads),
             classify_start=int(classify_start),
             classify_end=int(classify_end),
             cfr_ema_decay=float(cfr_ema_decay),
@@ -759,17 +820,11 @@ class Index:
         classify_end: int = 16,
         cfr_ema_decay: float = CFR_EMA_DECAY,
     ) -> dict[str, np.ndarray]:
-        if args:
-            if len(args) > 1:
-                raise TypeError(
-                    "search_layer0_cfr_summary_hide_node_batch accepts at most one "
-                    "positional argument after data."
-                )
-            if ef is not None:
-                raise TypeError("ef was provided both positionally and by keyword.")
-            ef = int(args[0])
-        if ef is None:
-            raise TypeError("Missing required argument: ef")
+        ef = self._resolve_optional_ef_arg(
+            "search_layer0_cfr_summary_hide_node_batch",
+            args,
+            ef,
+        )
         if hide_labels is None:
             raise TypeError("Missing required argument: hide_labels")
         return self._native_cfr_summary(
@@ -794,17 +849,11 @@ class Index:
         classify_end: int = 16,
         cfr_ema_decay: float = CFR_EMA_DECAY,
     ) -> dict[str, np.ndarray]:
-        if args:
-            if len(args) > 1:
-                raise TypeError(
-                    "search_layer0_cfr_summary_batch accepts at most one "
-                    "positional argument after data."
-                )
-            if ef is not None:
-                raise TypeError("ef was provided both positionally and by keyword.")
-            ef = int(args[0])
-        if ef is None:
-            raise TypeError("Missing required argument: ef")
+        ef = self._resolve_optional_ef_arg(
+            "search_layer0_cfr_summary_batch",
+            args,
+            ef,
+        )
         return self._native_cfr_summary(
             data,
             k=10 if k is None else int(k),
@@ -840,17 +889,11 @@ class Index:
         hide_labels=None,
         num_threads: int = -1,
     ) -> tuple[list[list[dict[str, Any]]], int, list[float]]:
-        if args:
-            if len(args) > 1:
-                raise TypeError(
-                    "search_layer0_path_with_dist_metrics_hide_node_batch accepts at most one "
-                    "positional argument after data."
-                )
-            if ef is not None:
-                raise TypeError("ef was provided both positionally and by keyword.")
-            ef = int(args[0])
-        if ef is None:
-            raise TypeError("Missing required argument: ef")
+        ef = self._resolve_optional_ef_arg(
+            "search_layer0_path_with_dist_metrics_hide_node_batch",
+            args,
+            ef,
+        )
         if hide_labels is None:
             raise TypeError("Missing required argument: hide_labels")
         return self._native_layer0_trace(
@@ -872,17 +915,11 @@ class Index:
         ef: int | None = None,
         num_threads: int = -1,
     ) -> tuple[list[list[dict[str, Any]]], int, list[float]]:
-        if args:
-            if len(args) > 1:
-                raise TypeError(
-                    "search_layer0_path_with_dist_metrics_batch accepts at most one "
-                    "positional argument after data."
-                )
-            if ef is not None:
-                raise TypeError("ef was provided both positionally and by keyword.")
-            ef = int(args[0])
-        if ef is None:
-            raise TypeError("Missing required argument: ef")
+        ef = self._resolve_optional_ef_arg(
+            "search_layer0_path_with_dist_metrics_batch",
+            args,
+            ef,
+        )
         return self._native_layer0_trace(
             data,
             k=10 if k is None else int(k),
