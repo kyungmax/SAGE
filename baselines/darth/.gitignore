@@ -1,0 +1,4 @@
+/build-parallel/
+/build-compare-avx512/
+__pycache__/
+*.pyc

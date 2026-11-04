@@ -1,0 +1,8 @@
+# SAGE runtime and local Python bindings. Baseline-specific dependencies are
+# documented in baselines/README.md. FAISS is built from ./faiss.
+numpy
+pandas
+h5py
+pybind11
+setuptools
+wheel

@@ -1,0 +1,24 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+*.so
+*.o
+*.a
+*.egg-info/
+build/
+build_*/
+build-*/
+.venv/
+sage.local.env
+runtime-local.json
+datasets/*
+!datasets/README.md
+index/*
+!index/README.md
+runs/
+final_analysis/
+hnswlib/tmp/
+
+# Generated experiment results and local validation captures.
+/experiment_results/
+/baselines/darth_faiss1141/validation/

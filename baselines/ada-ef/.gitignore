@@ -1,0 +1,17 @@
+build/
+*.log
+experiments/data/*.hdf5
+experiments/index/*
+experiments/statistics/*
+experiments/sampling/*
+experiments/estimation_table/*
+!experiments/data/
+!experiments/data/.gitkeep
+!experiments/index/
+!experiments/index/.gitkeep
+!experiments/statistics/
+!experiments/statistics/.gitkeep
+!experiments/sampling/
+!experiments/sampling/.gitkeep
+!experiments/estimation_table/
+!experiments/estimation_table/.gitkeep

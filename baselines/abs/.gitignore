@@ -1,0 +1,9 @@
+upstream/build/
+upstream/runs/
+upstream/grphs/
+upstream/data/
+__pycache__/
+audit/build/
+/build/
+/runs/
+*.pyc
