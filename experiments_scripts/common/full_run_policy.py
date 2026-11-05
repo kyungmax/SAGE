@@ -66,7 +66,9 @@ def fit_curve_policies(index, policy, ef_values, *, num_threads=1):
                                                       num_threads=num_threads)
                 if np.any(labels == ids[:, None]):
                     raise RuntimeError('Probe search did not hide self')
-                fixed[ef] = np.any(labels[:, :, None] == truth[:, None, :], axis=2).sum(axis=1)
+                matches = ((labels[:, :, None] >= 0) & (truth[:, None, :] >= 0)
+                           & (labels[:, :, None] == truth[:, None, :]))
+                fixed[ef] = matches.any(axis=2).sum(axis=1)
             return fixed[ef]
 
         for ef in missing:

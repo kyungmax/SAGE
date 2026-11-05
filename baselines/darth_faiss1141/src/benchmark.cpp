@@ -1,12 +1,18 @@
 // Uninstrumented full-batch benchmark. The default input/timing contract mirrors
 // baselines/darth/hnsw-test/full_run.cpp, including a second normalization of
-// prepared IP queries. Index/model/input loading and result checking are untimed.
+// prepared IP queries. This runner reports model initialization separately and
+// also reports initialization + the first existing batch as a cold model cost.
+// The first batch remains the requested warmup (no extra hidden search pass).
+// Steady searches still include native thread/workspace setup and teardown,
+// input/result allocation, optional normalization, and every DARTH prediction.
 #include <faiss/IndexHNSW.h>
 #include <faiss/impl/DeclarativeRecall.h>
 #include <faiss/index_io.h>
 #include <faiss/utils/distances.h>
+#ifdef DARTH1141_NEW
 #include <darth1141/search.h>
 #include <faiss/impl/VisitedTable.h>
+#endif
 #include <omp.h>
 
 #include <algorithm>
@@ -95,7 +101,7 @@ int main(int argc, char** argv) {
                 "--queries", "--k", "--threads", "--ef", "--initial-interval",
                 "--min-interval", "--target", "--model", "--warmups",
                 "--repeats", "--result-prefix", "--mode", "--visited", "--normalize",
-                "--audit-prefix"};
+                "--audit-prefix", "--model-lifetime"};
         std::map<std::string, std::string> args;
         for (int i = 1; i < argc; i += 2) {
             if (i + 1 >= argc || !allowed.count(argv[i]) ||
@@ -133,6 +139,7 @@ int main(int argc, char** argv) {
         const std::string mode = args.count("--mode") ? args.at("--mode") : "darth";
         const std::string visited = args.count("--visited") ? args.at("--visited") : "auto";
         const std::string normalize = args.count("--normalize") ? args.at("--normalize") : "1";
+        const std::string model_lifetime = args.count("--model-lifetime") ? args.at("--model-lifetime") : "persistent";
         if (mode != "darth" && mode != "vanilla" && mode != "observe") {
             throw std::runtime_error("--mode must be darth, vanilla, or observe");
         }
@@ -142,12 +149,21 @@ int main(int argc, char** argv) {
         if (normalize != "0" && normalize != "1") {
             throw std::runtime_error("--normalize must be 0 or 1");
         }
+        if (model_lifetime != "persistent" && model_lifetime != "per-call") {
+            throw std::runtime_error("--model-lifetime must be persistent or per-call");
+        }
         if (args.count("--audit-prefix") && mode != "darth") {
             throw std::runtime_error("--audit-prefix requires --mode darth");
         }
+#ifndef DARTH1141_NEW
+        if (visited == "hash" || mode == "observe") {
+            throw std::runtime_error("Frozen old runner supports dense visited and darth/vanilla only");
+        }
+#endif
         const auto prefix = required("--result-prefix");
         omp_set_dynamic(0);
         omp_set_num_threads(int(threads));
+        const auto input_start = Clock::now();
         auto raw = read_vectors<float>(required("--query-file"), nq);
         auto truth = read_vectors<int32_t>(required("--gt-file"), nq);
         auto truth_dist = read_vectors<float>(required("--gt-dist-file"), nq);
@@ -155,7 +171,10 @@ int main(int argc, char** argv) {
             throw std::runtime_error("GT must contain exactly k columns");
         }
         std::vector<faiss::idx_t> gt(truth.values.begin(), truth.values.end());
+        const auto input_end = Clock::now();
+        const auto index_start = Clock::now();
         std::unique_ptr<faiss::Index> owner(faiss::read_index(required("--index").c_str()));
+        const auto index_end = Clock::now();
         auto* index = dynamic_cast<faiss::IndexHNSWFlat*>(owner.get());
         if (!index || index->d != int(raw.dim) || index->ntotal < faiss::idx_t(k) ||
             (index->metric_type != faiss::METRIC_L2 &&
@@ -164,6 +183,7 @@ int main(int argc, char** argv) {
         }
         index->hnsw.efSearch = int(ef);
         std::string effective_visited = "dense";
+#ifdef DARTH1141_NEW
         if (visited == "dense") {
             index->hnsw.use_visited_hashset = false;
         } else if (visited == "hash") {
@@ -173,8 +193,10 @@ int main(int argc, char** argv) {
         }
         effective_visited = index->hnsw.use_visited_hashset.value_or(
                 size_t(index->ntotal) >= faiss::visited_table_hashset_threshold) ? "hash" : "dense";
+#endif
         const bool renormalize = normalize == "1" &&
                                  index->metric_type == faiss::METRIC_INNER_PRODUCT;
+        const auto base_model_start = Clock::now();
         std::unique_ptr<faiss::DARTHPredictorHNSW> predictor;
         if (mode != "vanilla") {
             faiss::DeclarativeRecallDataManager empty;
@@ -182,10 +204,37 @@ int main(int argc, char** argv) {
             predictor = std::make_unique<faiss::DARTHPredictorHNSW>(
                     empty, target, int(initial), int(minimum), false, model.c_str());
         }
+        const auto base_model_end = Clock::now();
+        const auto pool_start = Clock::now();
+#ifdef DARTH1141_NEW
+        std::unique_ptr<darth1141::PredictorPool> predictor_pool;
+        if (predictor && model_lifetime == "persistent") {
+            predictor_pool = std::make_unique<darth1141::PredictorPool>(
+                    *predictor, int(std::min(nq, threads)));
+        }
+        const size_t pool_capacity = predictor_pool ? size_t(predictor_pool->capacity()) : 0;
+#else
+        const size_t pool_capacity = 0;
+#endif
+        const auto pool_end = Clock::now();
+        const double base_model_seconds = predictor ? seconds(base_model_start, base_model_end) : 0;
+        const double pool_seconds = pool_capacity ? seconds(pool_start, pool_end) : 0;
+        const double total_model_seconds = base_model_seconds + pool_seconds;
         std::vector<faiss::idx_t> reference_labels;
         std::vector<float> reference_distances;
         size_t reference_ndis = 0;
         std::cout << std::setprecision(17);
+        std::cout << "{\"phase\":\"model_initialization\",\"model_lifetime\":\"" << model_lifetime
+                  << "\",\"input_load_seconds\":" << seconds(input_start, input_end)
+                  << ",\"index_load_seconds\":" << seconds(index_start, index_end)
+                  << ",\"base_model_load_seconds\":" << base_model_seconds
+                  << ",\"predictor_pool_load_seconds\":" << pool_seconds
+                  << ",\"total_model_init_seconds\":" << total_model_seconds
+                  << ",\"pool_capacity\":" << pool_capacity
+                  << ",\"worker_models_loaded_initially\":" << (predictor ? std::max<size_t>(1, pool_capacity) : 0)
+                  << ",\"pool_initialization_includes_model_identity_verification\":"
+                  << (pool_capacity ? "true" : "false")
+                  << "}\n" << std::flush;
         for (size_t run = 0; run < warmups + repeats; ++run) {
             faiss::hnsw_stats.reset();
             const auto start = Clock::now();
@@ -204,14 +253,19 @@ int main(int argc, char** argv) {
             if (mode == "vanilla") {
                 index->search(nq, queries.data(), k, distances.data(), labels.data());
             } else {
+#ifdef DARTH1141_NEW
                 darth1141::SearchOptions options;
                 options.mode = mode == "observe" ? darth1141::Mode::ObserveOnly : darth1141::Mode::Darth;
                 options.threads = int(threads);
                 // No trace wrapper, model interposition, logging, or diagnostics.
                 options.diagnostics = nullptr;
                 options.collect_trace = false;
+                options.predictor_pool = predictor_pool.get();
                 darth1141::search(*index, nq, queries.data(), k, distances.data(), labels.data(),
                                  predictor.get(), nullptr, options);
+#else
+                index->search_DARTH(nq, queries.data(), k, distances.data(), labels.data(), *predictor);
+#endif
             }
             const auto end = Clock::now();
             size_t hits = 0;
@@ -240,8 +294,13 @@ int main(int argc, char** argv) {
                 throw std::runtime_error("Warmup/repeat results or work differ");
             }
             std::cout << "{\"implementation\":\""
+#ifdef DARTH1141_NEW
                       << "darth_faiss1141"
+#else
+                      << "darth_frozen18"
+#endif
                       << "\",\"mode\":\"" << mode
+                      << "\",\"model_lifetime\":\"" << model_lifetime
                       << "\",\"visited_requested\":\"" << visited
                       << "\",\"visited_effective\":\"" << effective_visited
                       << "\",\"renormalize_ip\":" << (renormalize ? "true" : "false")
@@ -254,6 +313,15 @@ int main(int argc, char** argv) {
                       << ",\"ndis\":" << faiss::hnsw_stats.ndis
                       << ",\"e2e_seconds\":" << seconds(start, end)
                       << ",\"search_api_seconds\":" << seconds(api_start, end)
+                      << ",\"is_first_search\":" << (run == 0 ? "true" : "false");
+            if (run == 0) {
+                // This explicitly counts one-time model loading once; it is
+                // not subtracted from an observed search time. Index/query
+                // file loading is separately reported above, not included.
+                std::cout << ",\"cold_combined_model_init_plus_first_search_seconds\":"
+                          << total_model_seconds + seconds(start, end);
+            }
+            std::cout
                       << ",\"ids_fnv1a64\":\"" << hash_bytes(labels)
                       << "\",\"distances_fnv1a64\":\"" << hash_bytes(distances)
                       << "\"}\n" << std::flush;
@@ -276,14 +344,19 @@ int main(int argc, char** argv) {
                     nq, raw.dim, k, queries.data(), log_filename.data(), nullptr, index->ntotal, gt.data(), k);
             predictor->init_log_file();
             faiss::hnsw_stats.reset();
+#ifdef DARTH1141_NEW
             std::vector<darth1141::QueryDiagnostics> diagnostics;
             darth1141::SearchOptions audit_options;
             audit_options.mode = darth1141::Mode::Darth;
             audit_options.threads = int(threads);
             audit_options.diagnostics = &diagnostics;
             audit_options.collect_trace = false;
+            audit_options.predictor_pool = predictor_pool.get();
             darth1141::search(*index, nq, queries.data(), k, distances.data(), labels.data(),
                              predictor.get(), nullptr, audit_options);
+#else
+            index->search_DARTH(nq, queries.data(), k, distances.data(), labels.data(), *predictor);
+#endif
             predictor->close_log_file();
             if (labels != reference_labels ||
                 std::memcmp(distances.data(), reference_distances.data(), distances.size() * sizeof(float)) ||
@@ -292,9 +365,10 @@ int main(int argc, char** argv) {
             }
             std::cout << "{\"phase\":\"untimed_audit\",\"query_count\":" << nq
                       << ",\"matches_timed_outputs\":true,\"ndis\":" << faiss::hnsw_stats.ndis;
+#ifdef DARTH1141_NEW
             std::ofstream counters(audit_prefix + ".counters.csv");
             counters << "qid,actual_distance_evaluations,upper_distance_evaluations,logical_ndis,nstep,insertions,"
-                        "predictor_calls,final_interval,first_nn_distance,predicted_recall,early_terminated,uses_hashset\n";
+                        "predictor_calls,final_interval,first_nn_distance,predicted_recall,early_terminated,uses_hashset,completed_expansions,started_expansions,unfinished_expansions\n";
             counters << std::setprecision(17);
             size_t early_terminated = 0;
             uint64_t total_calls = 0, actual_distances = 0, logical_distances = 0;
@@ -309,7 +383,8 @@ int main(int argc, char** argv) {
                          << info.nstep << ',' << info.insertions << ',' << info.predictor_calls << ','
                          << info.final_interval << ',' << info.first_nn_distance << ','
                          << info.predicted_recall << ',' << info.early_terminated << ','
-                         << info.uses_hashset << '\n';
+                         << info.uses_hashset << ',' << info.completed_expansions << ','
+                         << info.started_expansions << ',' << info.unfinished_expansions << '\n';
             }
             if (!counters) {
                 throw std::runtime_error("Cannot write audit counters");
@@ -318,8 +393,20 @@ int main(int argc, char** argv) {
                       << ",\"predictor_calls\":" << total_calls
                       << ",\"actual_distance_evaluations\":" << actual_distances
                       << ",\"logical_ndis\":" << logical_distances;
+#endif
             std::cout << "}\n" << std::flush;
         }
+        // The pool contains only model handles; all batch-local buffers have
+        // already been destroyed. Report final ownership release separately.
+        const auto model_free_start = Clock::now();
+#ifdef DARTH1141_NEW
+        predictor_pool.reset();
+#endif
+        predictor.reset();
+        const auto model_free_end = Clock::now();
+        std::cout << "{\"phase\":\"model_shutdown\",\"model_lifetime\":\"" << model_lifetime
+                  << "\",\"model_free_seconds\":" << seconds(model_free_start, model_free_end)
+                  << "}\n" << std::flush;
     } catch (const std::exception& error) {
         std::cerr << "DARTH full-run benchmark failed: " << error.what() << '\n';
         return 1;

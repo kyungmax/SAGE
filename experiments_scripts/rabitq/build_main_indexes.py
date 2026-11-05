@@ -268,7 +268,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset")
     parser.add_argument("--datasets", help="Comma-separated dataset names required for prepare")
     parser.add_argument("--datasets-config", type=Path,
-        default=ROOT / "experiments_scripts/main/config/main6_online24/datasets.json")
+        default=ROOT / "experiments_scripts/01_main_results/config/main6_online24/datasets.json")
     args = parser.parse_args()
     args.plan = args.plan.resolve()
     if args.action == "prepare":

@@ -97,7 +97,7 @@ def parse_args(argv=None):
     calibrate.add_argument("--efs", nargs="+", type=int, help="Additional curve policies to fit")
     sweep = actions.add_parser("sweep", parents=[shared], help="Measure queries using frozen policies")
     sweep.add_argument("--query-threads", type=int, default=24)
-    sweep.add_argument("--rounds", type=int, default=3)
+    sweep.add_argument("--rounds", type=int, default=5)
     sweep.add_argument("--efs", nargs="+", type=int, help="Subset of already calibrated curve points")
     sweep.add_argument("--out", type=Path, required=True)
     sweep.add_argument("--force-output", action="store_true")

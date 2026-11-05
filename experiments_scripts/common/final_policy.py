@@ -23,17 +23,8 @@ from .projected_local_acceptable_runtime import (
 )
 
 POLICY_VERSION = "sage-final-raw-min64-fixed10k-v7"
-PRE_EXPANSION_POLICY_VERSIONS = {
-    POLICY_VERSION, "sage-final-raw-min64-fixed10k-v6", "sage-final-raw-min64-fixed10k-v5"
-}
 OFFLINE_MAX_EF = 4096
 HIGH_EF_GRID_STEP = 128
-# Execution of historical frozen policies remains useful for comparisons. New
-# calibration/cache writers use only POLICY_VERSION; v2 does not certify the pool.
-EXECUTABLE_POLICY_VERSIONS = {
-    *PRE_EXPANSION_POLICY_VERSIONS, "sage-final-raw-min64-fixed10k-v4",
-    "sage-final-raw-min64-fixed10k-v3", "sage-final-raw-min64-v2"
-}
 
 
 def _grid_for_cap(cap, *, min_ef=64, k=10):
@@ -137,8 +128,7 @@ def calibrate_policy(index, *, probe_ids=None, lid_pool=None, k=10, num_threads=
             raise ValueError("No finite positive LID candidates.")
         pool["query_source"] = "train"
         selected = _select_dummy_queries(
-            index=index, num_nodes=index.get_current_count(), lid_df=pool,
-            num_calibration_queries=DEFAULT_CALIBRATION_PROBE_COUNT, selection_mode="quantile",
+            lid_df=pool, num_calibration_queries=DEFAULT_CALIBRATION_PROBE_COUNT,
             trim_low_percentile=1., trim_high_percentile=99.)
         probe_ids = selected["query_id"].to_numpy(np.int64)
         selection = f"lid_quantile{DEFAULT_CALIBRATION_PROBE_COUNT}_trim1_99"
@@ -168,7 +158,9 @@ def calibrate_policy(index, *, probe_ids=None, lid_pool=None, k=10, num_threads=
                     vectors, k=k, hide_labels=ids, num_threads=num_threads)
                 if np.any(labels == ids[:, None]):
                     raise RuntimeError("Probe search did not hide self.")
-                fixed[ef] = np.any(labels[:, :, None] == truth[:, None, :], axis=2).sum(axis=1)
+                matches = ((labels[:, :, None] >= 0) & (truth[:, None, :] >= 0)
+                           & (labels[:, :, None] == truth[:, None, :]))
+                fixed[ef] = matches.any(axis=2).sum(axis=1)
             return fixed[ef]
 
         ef, history = _recommend_ef(lambda e: get_hits(e).sum(), total_hits=len(ids) * k,
@@ -233,8 +225,8 @@ def query(index, vectors, policy, *, num_threads=-1, filter=None, return_diagnos
     FAISS diagnostic calls can additionally request native final ef and main /
     shadow CFR arrays with return_routing=True (requires a rebuilt extension).
     """
-    if policy["version"] not in EXECUTABLE_POLICY_VERSIONS or policy["backend"] not in ("hnswlib", "faiss", "rabitq"):
-        raise ValueError("Expected a supported SAGE final-policy calibration.")
+    if policy["version"] != POLICY_VERSION or policy["backend"] not in ("hnswlib", "faiss", "rabitq"):
+        raise ValueError("Expected the current SAGE final-policy calibration; recalibrate before querying.")
     if policy["k"] == 100 and policy["shadow"] is not None:
         raise ValueError("k=100 requires shadow disabled")
     main, shadow = policy["main"], policy["shadow"]
@@ -245,8 +237,7 @@ def query(index, vectors, policy, *, num_threads=-1, filter=None, return_diagnos
                   bucket_gamma_ratios=main["gammas"], enable_stop=True,
                   classify_start=1, classify_end=16, return_diagnostics=return_diagnostics,
                   shadow_stop_enabled=False,
-                  # v5 introduced pre-expansion shadow; v6/v7 change calibration.
-                  shadow_pre_expansion=policy["version"] in PRE_EXPANSION_POLICY_VERSIONS)
+                  shadow_pre_expansion=True)
     if return_routing:
         kwargs["return_routing"] = True
     if shadow is not None:

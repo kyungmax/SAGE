@@ -29,7 +29,7 @@ build/backend_runner --phase offline --dataset example \
 build/backend_runner --phase online --dataset example \
   --data-path /path/example.hdf5 --experiments-root /path/adaef-run \
   --m 32 --ef-construction 500 --k 10 --num-threads 24 --expected-recall 0.99 \
-  --parallel-queries --e2e-timing --warmup-runs 1 --measured-runs 4 \
+  --parallel-queries --e2e-timing --warmup-runs 1 --measured-runs 5 \
   --output-json /path/adaef-run/online.json
 ```
 

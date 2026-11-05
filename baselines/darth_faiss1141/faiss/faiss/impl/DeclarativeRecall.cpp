@@ -140,7 +140,7 @@ float DeclarativeRecallDataManager::get_nearest_dist_of_query(idx_t q_id) {
 }
 
 float DeclarativeRecallDataManager::get_furthest_dist_of_query(idx_t q_id) {
-  float max_dist = std::numeric_limits<float>::min();
+  float max_dist = std::numeric_limits<float>::lowest();
   for (idx_t i = 0; i < k; i++) {
     if (distances[q_id * k + i] > max_dist)
       max_dist = distances[q_id * k + i];
@@ -1044,11 +1044,11 @@ float DARTHPredictorHNSW::predict_recall(
       (double)total_insertions,
       (double)first_nn_dis,
       nn_dist,
-      avg_dist,
       furthest_dist,
+      avg_dist,
       variance,
-      median,
       percentile_25,
+      median,
       percentile_75};
 
   double out_result[1];

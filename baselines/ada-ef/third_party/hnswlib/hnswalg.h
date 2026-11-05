@@ -1594,6 +1594,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     }
 
 
+    template <bool collect_work = false>
     std::priority_queue<std::pair<dist_t, labeltype>>
     adaptiveSearchKnnTest(
         const void *query_data, 
@@ -1601,7 +1602,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         const size_t statics_length,
         const hnswdis::ApproximatedScoreCalculator& score_calculator,
         hnswdis::Sketch* sketch = nullptr,
-        BaseFilterFunctor* isIdAllowed = nullptr) const {
+        BaseFilterFunctor* isIdAllowed = nullptr,
+        size_t* completed_steps = nullptr) const {
 
         std::priority_queue<std::pair<dist_t, labeltype >> result;
         if (cur_element_count == 0) return result;
@@ -1641,12 +1643,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         bool bare_bone_search = !num_deleted_ && !isIdAllowed;
 
         if (bare_bone_search) {
-            top_candidates = adaptiveSearchBaseLayerST2<true>(
-                    currObj, query_data, std::max(ef_, k), statics_length, score_calculator, sketch, isIdAllowed);
+            top_candidates = adaptiveSearchBaseLayerST2<true, false, collect_work>(
+                    currObj, query_data, std::max(ef_, k), statics_length, score_calculator, sketch, isIdAllowed, nullptr, completed_steps);
                         
         } else {
-            top_candidates = adaptiveSearchBaseLayerST2<false>(
-                    currObj, query_data, std::max(ef_, k), statics_length, score_calculator, sketch, isIdAllowed);
+            top_candidates = adaptiveSearchBaseLayerST2<false, false, collect_work>(
+                    currObj, query_data, std::max(ef_, k), statics_length, score_calculator, sketch, isIdAllowed, nullptr, completed_steps);
             
         }
 
@@ -1663,7 +1665,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     }
 
     // bare_bone_search means there is no check for deletions and stop condition is ignored in return of extra performance
-    template <bool bare_bone_search = true, bool collect_metrics = false>
+    template <bool bare_bone_search = true, bool collect_metrics = false, bool collect_work = false>
     std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>
     adaptiveSearchBaseLayerST2(
         tableint ep_id,
@@ -1673,7 +1675,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         const hnswdis::ApproximatedScoreCalculator& score_calculator,
         hnswdis::Sketch* sketch,
         BaseFilterFunctor* isIdAllowed = nullptr,
-        BaseSearchStopCondition<dist_t>* stop_condition = nullptr) const {
+        BaseSearchStopCondition<dist_t>* stop_condition = nullptr,
+        size_t* completed_steps = nullptr) const {
 
         // change === start    
         size_t ef_copy = ef;
@@ -1849,6 +1852,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     }
                 }
             }
+            if constexpr (collect_work) ++*completed_steps;
         }
 
         visited_list_pool_->releaseVisitedList(vl);

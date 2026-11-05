@@ -46,4 +46,42 @@ add_library(darth1141 STATIC src/search.cpp)
 target_include_directories(darth1141 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(darth1141 PUBLIC faiss_avx512 darth_predictor OpenMP::OpenMP_CXX Threads::Threads)
 add_executable(benchmark_new src/benchmark.cpp)
+target_compile_definitions(benchmark_new PRIVATE DARTH1141_NEW=1)
 target_link_libraries(benchmark_new PRIVATE darth1141)
+
+# Training retains DARTH's original 1.8 collector and checkpoint placement.
+# Build it separately because its FAISS target names overlap the online port.
+include(ExternalProject)
+set(DARTH_TRAIN_BUILD_JOBS 4 CACHE STRING "Parallel jobs for the original training FAISS build")
+set(DARTH_TRAIN_BUILD "${CMAKE_CURRENT_BINARY_DIR}/training_faiss18")
+ExternalProject_Add(darth_training_faiss18_build
+  SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../darth"
+  BINARY_DIR "${DARTH_TRAIN_BUILD}"
+  CMAKE_ARGS
+    -DCMAKE_BUILD_TYPE=Release
+    -DBUILD_SHARED_LIBS=ON
+    -DFAISS_OPT_LEVEL=generic
+    -DLIGHTGBM_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/third_party/lightgbm/include
+    -DLIGHTGBM_LIB=${LIGHTGBM_LIB}
+  BUILD_COMMAND "${CMAKE_COMMAND}" --build <BINARY_DIR>
+    --target faiss --parallel ${DARTH_TRAIN_BUILD_JOBS}
+  BUILD_BYPRODUCTS "${DARTH_TRAIN_BUILD}/faiss/libfaiss.so"
+  BUILD_ALWAYS TRUE
+  INSTALL_COMMAND ""
+  EXCLUDE_FROM_ALL TRUE)
+add_library(darth_training_faiss18 SHARED IMPORTED)
+set_target_properties(darth_training_faiss18 PROPERTIES
+  IMPORTED_LOCATION "${DARTH_TRAIN_BUILD}/faiss/libfaiss.so"
+  INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/../darth")
+add_dependencies(darth_training_faiss18 darth_training_faiss18_build)
+
+add_library(darth_training_predictor OBJECT faiss/faiss/impl/DeclarativeRecall.cpp)
+target_include_directories(darth_training_predictor PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../darth")
+target_compile_options(darth_training_predictor PRIVATE
+  -mavx2 -mfma -mf16c -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw -mpopcnt)
+target_link_libraries(darth_training_predictor PUBLIC lightgbm_runtime OpenMP::OpenMP_CXX)
+add_executable(train_darth_corrected src/train_darth_corrected.cpp)
+target_link_libraries(train_darth_corrected PRIVATE
+  darth_training_predictor darth_training_faiss18 Threads::Threads)
+# Corrected executable definitions preempt the old collector's shared symbols.
+target_link_options(train_darth_corrected PRIVATE -Wl,--export-dynamic)

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from .lid_selection import select_lid_representatives, trim_lid_outliers
+from .lid_selection import select_quantile_lid_representatives, trim_lid_outliers
 
 
 @dataclass(frozen=True)
@@ -15,49 +15,33 @@ class MixedThresholdConfig:
     resolved_route_efs: tuple[int, ...]
 
 
-def _coerce_lid_df(index, *, num_nodes: int, lid_df: pd.DataFrame | None) -> pd.DataFrame:
-    if lid_df is not None:
-        scoped = lid_df.copy()
-        scoped["query_id"] = pd.to_numeric(scoped["query_id"], errors="raise").astype(np.int64)
-        scoped["lid"] = pd.to_numeric(scoped["lid"], errors="raise").astype(np.float32)
-        if "query_source" not in scoped.columns:
-            scoped["query_source"] = "train"
-        else:
-            scoped["query_source"] = scoped["query_source"].fillna("train").astype(str)
-        return scoped[["query_id", "query_source", "lid"]].sort_values("query_id").reset_index(drop=True)
-
-    lids = np.asarray(index.get_lids(), dtype=np.float32)
-    if lids.shape[0] != int(num_nodes):
-        raise ValueError(f"Expected {int(num_nodes)} internal LIDs, but got {lids.shape[0]}.")
-    return pd.DataFrame(
-        {
-            "query_id": np.arange(int(num_nodes), dtype=np.int64),
-            "query_source": "train",
-            "lid": lids,
-        }
-    )
+def _coerce_lid_df(lid_df: pd.DataFrame) -> pd.DataFrame:
+    scoped = lid_df.copy()
+    scoped["query_id"] = pd.to_numeric(scoped["query_id"], errors="raise").astype(np.int64)
+    scoped["lid"] = pd.to_numeric(scoped["lid"], errors="raise").astype(np.float32)
+    if "query_source" not in scoped.columns:
+        scoped["query_source"] = "train"
+    else:
+        scoped["query_source"] = scoped["query_source"].fillna("train").astype(str)
+    return scoped[["query_id", "query_source", "lid"]].sort_values("query_id").reset_index(drop=True)
 
 
 def _select_dummy_queries(
     *,
-    index,
-    num_nodes: int,
-    lid_df: pd.DataFrame | None,
+    lid_df: pd.DataFrame,
     num_calibration_queries: int,
-    selection_mode: str,
     trim_low_percentile: float,
     trim_high_percentile: float,
 ) -> pd.DataFrame:
-    scoped_lid_df = _coerce_lid_df(index, num_nodes=num_nodes, lid_df=lid_df)
+    scoped_lid_df = _coerce_lid_df(lid_df)
     trimmed_df, trimmed_lid_min, trimmed_lid_max = trim_lid_outliers(
         lid_df=scoped_lid_df,
         low_percentile=float(trim_low_percentile),
         high_percentile=float(trim_high_percentile),
     )
-    selected_df = select_lid_representatives(
+    selected_df = select_quantile_lid_representatives(
         trimmed_df=trimmed_df,
         num_samples=int(num_calibration_queries),
-        selection_mode=str(selection_mode),
         lid_min=float(trimmed_lid_min),
         lid_max=float(trimmed_lid_max),
     ).copy()

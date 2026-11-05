@@ -1,0 +1,48 @@
+{
+  "shared_corpus": "Same 10M Wikipedia passages from the Cohere corpus",
+  "shared_split": "Aligned ordered 10M train passages and 1000 held-out query passages",
+  "datasets": [
+    {
+      "dataset": "wikipedia-uploadedsplit-glove300-angular",
+      "model": "glove",
+      "space": "cosine",
+      "dimension": 300,
+      "train_count": 10000000,
+      "query_count": 1000,
+      "M": 32,
+      "efConstruction": 500,
+      "dataset_file": "cohere_embeddings_aligned_sigmod_20260929/wikipedia-uploadedsplit-glove300-angular.hdf5",
+      "faiss_index": {
+        "file": "faiss_wikipedia_five_models_sigmod_20260929/wikipedia-uploadedsplit-glove300-angular.M32.efC500.index"
+      }
+    },
+    {
+      "dataset": "wikipedia-uploadedsplit-cohere768-angular",
+      "model": "cohere",
+      "space": "cosine",
+      "dimension": 768,
+      "train_count": 10000000,
+      "query_count": 1000,
+      "M": 32,
+      "efConstruction": 500,
+      "dataset_file": "cohere_embeddings_aligned_sigmod_20260929/wikipedia-uploadedsplit-cohere768-angular.hdf5",
+      "faiss_index": {
+        "file": "faiss_wikipedia_five_models_sigmod_20260929/wikipedia-uploadedsplit-cohere768-angular.M32.efC500.index"
+      }
+    },
+    {
+      "dataset": "cohere-bge-m3-fp32-tf32-angular",
+      "model": "bge",
+      "space": "cosine",
+      "dimension": 1024,
+      "train_count": 10000000,
+      "query_count": 1000,
+      "M": 32,
+      "efConstruction": 500,
+      "dataset_file": "cohere_embeddings/cohere-bge-m3-fp32-tf32-angular.hdf5",
+      "faiss_index": {
+        "file": "faiss_wikipedia_five_models_sigmod_20260929/cohere-bge-m3-fp32-tf32-angular.M32.efC500.index"
+      }
+    }
+  ]
+}

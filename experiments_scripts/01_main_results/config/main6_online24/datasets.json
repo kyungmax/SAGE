@@ -1,0 +1,106 @@
+{
+  "datasets": [
+    {
+      "dataset": "gooaq-distilroberta-768-normalized",
+      "label": "GooAQ",
+      "space": "cosine",
+      "dimension": 768,
+      "train_count": 1475024,
+      "query_count": 1000,
+      "M": 32,
+      "efConstruction": 500,
+      "dataset_file": "gooaq-distilroberta-768-normalized.hdf5",
+      "faiss_index": {
+        "file": "faiss_m32_efc500_gooaq_20260917/gooaq-distilroberta-768-normalized.M32.efC500.index"
+      },
+      "hnswlib_index": {
+        "file": "main6_icde_replacements_20261014/gooaq-distilroberta-768-normalized.M32.efC500.index"
+      }
+    },
+    {
+      "dataset": "glove-100-angular",
+      "label": "GloVe100",
+      "space": "cosine",
+      "dimension": 100,
+      "train_count": 1183514,
+      "query_count": 10000,
+      "M": 32,
+      "efConstruction": 500,
+      "dataset_file": "glove-100-angular.hdf5",
+      "faiss_index": {
+        "file": "faiss_m32_efc500_main8_20260707/darth/index/glove-100-angular/glove-100-angular.M32.efC500.index"
+      },
+      "hnswlib_index": {
+        "file": "adaef_rebuilt_20261001/hnswlib/glove-100-angular.M32.efC500.index"
+      }
+    },
+    {
+      "dataset": "cohere-768-angular",
+      "label": "Cohere",
+      "space": "cosine",
+      "dimension": 768,
+      "train_count": 10000000,
+      "query_count": 1000,
+      "M": 32,
+      "efConstruction": 500,
+      "dataset_file": "cohere-768-angular.hdf5",
+      "faiss_index": {
+        "file": "cohere_faiss_rebuild_20261013/cohere-768-angular.M32.efC500.index"
+      },
+      "hnswlib_index": {
+        "file": "adaef_rebuilt_20261001/hnswlib/cohere-768-angular.M32.efC500.index"
+      }
+    },
+    {
+      "dataset": "youtube-15M-angular",
+      "label": "YouTube15M",
+      "space": "cosine",
+      "dimension": 1024,
+      "train_count": 15686309,
+      "query_count": 1000,
+      "M": 32,
+      "efConstruction": 500,
+      "dataset_file": "youtube-15M-angular.hdf5",
+      "faiss_index": {
+        "file": "faiss_m32_efc500_main8_20260707/darth/index/youtube-15M-angular/youtube-15M-angular.M32.efC500.index"
+      },
+      "hnswlib_index": {
+        "file": "adaef_rebuilt_20261001/hnswlib/youtube-15M-angular.M32.efC500.index"
+      }
+    },
+    {
+      "dataset": "msmarco-qwen-1024-normalized",
+      "label": "MSMARCO-Qwen",
+      "space": "cosine",
+      "dimension": 1024,
+      "train_count": 8840823,
+      "query_count": 1000,
+      "M": 32,
+      "efConstruction": 500,
+      "dataset_file": "msmarco-qwen-1024-normalized.hdf5",
+      "faiss_index": {
+        "file": "msmarco_qwen_current_k10_20261014/msmarco-qwen-1024-normalized.M32.efC500.index"
+      },
+      "hnswlib_index": {
+        "file": "main6_icde_replacements_20261014/msmarco-qwen-1024-normalized.M32.efC500.index"
+      }
+    },
+    {
+      "dataset": "msspacev-100M-i8-euclidean",
+      "label": "SpaceV",
+      "space": "l2",
+      "dimension": 100,
+      "train_count": 100000000,
+      "query_count": 29316,
+      "M": 32,
+      "efConstruction": 500,
+      "dataset_file": "msspacev-100M-i8-euclidean.hdf5",
+      "faiss_index": {
+        "file": "faiss_m32_efc500_main8_20260707/darth/index/msspacev-100M-i8-euclidean/msspacev-100M-i8-euclidean.M32.efC500.index"
+      },
+      "hnswlib_index": {
+        "file": "main6_full_k10_20261004/msspacev-100M-i8-euclidean/msspacev-100M-i8-euclidean.M32.efC500.index"
+      }
+    }
+  ]
+}

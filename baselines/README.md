@@ -20,7 +20,7 @@ bash baselines/darth/scripts/build_parallel.sh
 ```
 
 The PiP/ABS batch runners and parameter-tuning entry points are under
-[experiments_scripts/main](../experiments_scripts/main/README.md).
+[experiments_scripts/01_main_results](../experiments_scripts/01_main_results/README.md).
 Ada-EF and DARTH accept explicit datasets, indexes and models through their
 standalone interfaces. Those inputs and generated measurements are not source
 code and must be supplied separately.

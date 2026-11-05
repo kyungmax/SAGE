@@ -1,34 +1,18 @@
-#!/usr/bin/env python3
-"""RaBitQ benchmark driver with train-only calibration and paired curves."""
-import argparse
-import csv
-import fcntl
+"""RaBitQ cell worker used by the numbered robustness experiment."""
 import os
 from pathlib import Path
 import statistics
-import subprocess
 import sys
 import time
 from types import SimpleNamespace
 
 PROJECT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT / 'experiments_scripts/main'))
-from main6_common import ROOT, RUN_ROOT, SAGE_ROOT, hits_per_query, validate_policy_config
-from run_baselines_main6 import read, save, sha, array_sha, csvwrite, require, environment
-from launch_main6_online24 import siblings, cpu_ticks, utilization
+sys.path.insert(0, str(PROJECT / 'experiments_scripts/01_main_results'))
+from main6_common import SAGE_ROOT, hits_per_query
+from run_baselines_main6 import save, sha, array_sha, csvwrite, require
 from tune_baselines import ef_grid
 
 sys.path.insert(0, str(SAGE_ROOT))
-
-
-def rabitq_environment(plan):
-    env = environment(plan)
-    # RaBitQ uses std::thread. OpenMP's `close` binding pins the importing
-    # thread to its first place; every native worker then inherits that CPU.
-    # numactl owns the 24-core mask for this backend; BLAS stays single-threaded.
-    env['OMP_PROC_BIND'] = 'FALSE'
-    env.pop('OMP_PLACES', None)
-    return env
 
 
 def require_search_affinity(cpus):
@@ -40,66 +24,6 @@ def dataset(entry):
     from experiments_scripts.rabitq.runner import Dataset
     return Dataset(entry['data_path'], raw=entry['raw'], metric=entry['metric'],
                    normalize=entry['normalize'])
-
-
-def fingerprint(plan_path, plan):
-    from experiments_scripts.rabitq.runner import file_identity
-    sources = [Path(__file__), ROOT / 'main6_common.py', ROOT / 'run_baselines_main6.py',
-               ROOT / 'launch_main6_online24.py', ROOT / 'tune_baselines.py',
-               SAGE_ROOT / 'scripts/python.sh', SAGE_ROOT / 'sage_env.sh']
-    for folder in ('common', 'rabitq'):
-        sources.extend(sorted((SAGE_ROOT / 'experiments_scripts' / folder).glob('*.py')))
-    sources.extend(sorted((SAGE_ROOT / 'rabitq/build_sage/python/rabitqlib').glob('*.py')))
-    binaries = sorted((SAGE_ROOT / 'rabitq/build_sage/python/rabitqlib').glob('*.so'))
-    require(len(binaries) == 1, 'Expected exactly one local RaBitQ extension')
-    return dict(plan_sha256=sha(plan_path), binary_sha256=sha(binaries[0]),
-                source_sha256={str(p): sha(p) for p in sources},
-                inputs={e['dataset']: dict(data=dataset(e).identity(),
-                        index=file_identity(e['index_path'])) for e in plan['entries']})
-
-
-def preflight(plan):
-    """Only file identities, runtime import and HDF5 metadata; no graph loads/search."""
-    import h5py
-    from experiments_scripts.rabitq.final_policy import load_library
-    from experiments_scripts.common.offline_calibration import FIXED_CALIBRATION_LID_POOL_SIZE
-    from experiments_scripts.rabitq.runner import file_identity
-    validate_policy_config(plan)
-    threads = plan['online_threads']
-    require(threads == plan['offline_threads'] == len(set(plan['timing']['cpus'])),
-            'Offline/online must use the same physical cores')
-    require(plan['warmups_per_setting'] >= 1 and plan['timed_repeats'] >= 2,
-            'Need warmup and repeated timings')
-    require(plan['timing']['include_query_preprocessing'], 'Preprocessing must be timed')
-    require(set(plan['timing']['cpus']) <= os.sched_getaffinity(0), 'Timing CPUs unavailable')
-    library = load_library()
-    entries = {e['dataset']: e for e in plan['entries']}
-    require(len(entries) == len(plan['entries']), 'Duplicate dataset entries')
-    rows = []
-    for entry in entries.values():
-        data = dataset(entry)
-        require(data.identity() == entry['dataset_identity'], f"Changed dataset: {entry['dataset']}")
-        require(file_identity(entry['index_path']) == entry['index_identity'],
-                f"Changed index: {entry['dataset']}")
-        require(entry['saved_reloaded_exact_match'], 'Index needs save/reload verification')
-        with h5py.File(data.path) as handle:
-            require(handle['train'].shape == data.shape == tuple(entry['shape']), 'Train shape mismatch')
-            require(handle['test'].shape == (entry['query_count'], data.shape[1]), 'Query shape mismatch')
-            require(handle['neighbors'].shape[0] == entry['query_count'], 'GT row mismatch')
-            width = handle['neighbors'].shape[1]
-        selected = [int(k) for k, names in plan['datasets_by_k'].items() if entry['dataset'] in names]
-        require(selected and max(selected) <= width, 'Ground truth has insufficient neighbors')
-        require(data.shape[0] >= FIXED_CALIBRATION_LID_POOL_SIZE,
-                'Production calibration requires at least 10000 indexed vectors')
-        rows.append(dict(dataset=entry['dataset'], k=selected, queries=entry['query_count'],
-                         ground_truth_width=width, index_bytes=entry['index_identity']['size'],
-                         lid_pool_size=FIXED_CALIBRATION_LID_POOL_SIZE))
-    for k, names in plan['datasets_by_k'].items():
-        require(int(k) in (10, 100) and len(names) == len(set(names)) and
-                set(names) <= entries.keys(), 'Invalid dataset/k scope')
-    return dict(passed=True, real_search_started=False, runtime=library.__file__,
-                policy_api=library.SAGE_POLICY_API, cells=sum(len(v) for v in plan['datasets_by_k'].values()),
-                datasets=rows)
 
 
 def cell_run(plan, entry, k, folder):
@@ -218,92 +142,3 @@ def cell_run(plan, entry, k, folder):
     csvwrite(folder / 'summary.csv', rows)
     save(folder / 'complete.json', dict(passed=True, rows=len(rows), offline=offline))
     stage('complete')
-
-
-def wait_quiet(plan, output):
-    cpus = plan['timing']['cpus']
-    watched = siblings(cpus)
-    quiet = 0
-    while quiet < 30:
-        before = cpu_ticks()
-        time.sleep(10)
-        load = utilization(before, cpu_ticks(), watched, len(cpus))
-        idle = load['physical_capacity_busy_percent'] < 5 and load['busiest_logical_cpu_percent'] < 80
-        quiet = quiet + 10 if idle else 0
-        save(output / 'status.json', dict(stage='waiting_for_quiet_cpus', stable_seconds=quiet, cpu_load=load))
-        print(f'Waiting for idle CPUs: stable={quiet}s, busy={load["physical_capacity_busy_percent"]:.1f}%', flush=True)
-
-
-def run(args, plan):
-    require(plan.get('execution_authorized') is True, 'User must approve this RaBitQ plan before execution')
-    output = Path(plan['output'])
-    frozen = fingerprint(args.plan, plan)
-    if args.cell:
-        require(read(output / 'manifest.json')['signature'] == frozen, 'Sources or inputs changed')
-        k_text, name = args.cell.split('/', 1)
-        k = int(k_text.removeprefix('k'))
-        require(name in plan['datasets_by_k'][str(k)], 'Cell outside approved scope')
-        entry = next(e for e in plan['entries'] if e['dataset'] == name)
-        cell_run(plan, entry, k, output / args.cell)
-        require(fingerprint(args.plan, plan) == frozen, 'Sources or inputs changed during measurement')
-        return
-    report = preflight(plan)
-    require(not output.exists(), f'Use a new output directory: {output}')
-    lock_path = RUN_ROOT / plan['timing']['lock_file']
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    output.mkdir(parents=True)
-    (output / 'logs').mkdir()
-    save(output / 'manifest.json', dict(signature=frozen, plan=plan, preflight=report, result_reuse=False))
-    completed = []
-    cell = None
-    try:
-        with lock_path.open('a') as lock:
-            save(output / 'status.json', dict(stage='waiting_for_timing_lock'))
-            fcntl.flock(lock, fcntl.LOCK_EX)
-            for k, names in plan['datasets_by_k'].items():
-                for name in names:
-                    cell = f'k{k}/{name}'
-                    wait_quiet(plan, output)
-                    require(fingerprint(args.plan, plan) == frozen, 'Sources or inputs changed while queued')
-                    save(output / 'status.json', dict(stage='running', cell=cell, completed=completed))
-                    argv = ['numactl', '--physcpubind=' + ','.join(map(str, plan['timing']['cpus'])),
-                            '--membind=' + str(plan['timing']['numa_node']), 'bash',
-                            str(SAGE_ROOT / 'scripts/python.sh'), str(Path(__file__).resolve()),
-                            '--plan', str(args.plan), '--cell', cell]
-                    with (output / 'logs' / f'k{k}_{name}.log').open('x') as log:
-                        subprocess.run(argv, env=rabitq_environment(plan), stdout=log, stderr=subprocess.STDOUT,
-                                       check=True, pass_fds=(lock.fileno(),))
-                    completed.append(cell)
-                    for filename in ('summary.csv', 'offline_times.csv'):
-                        rows = []
-                        for done in completed:
-                            with (output / done / filename).open() as stream:
-                                rows.extend(csv.DictReader(stream))
-                        csvwrite(output / filename, rows)
-            require(fingerprint(args.plan, plan) == frozen, 'Sources or inputs changed during run')
-            save(output / 'complete.json', dict(passed=True, completed=completed))
-            save(output / 'status.json', dict(stage='complete', completed=completed))
-    except BaseException as error:
-        save(output / 'status.json', dict(stage='failed', cell=cell, completed=completed, error=repr(error)))
-        raise
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--plan', required=True, type=Path)
-    parser.add_argument('--preflight', action='store_true')
-    parser.add_argument('--cell', help=argparse.SUPPRESS)
-    args = parser.parse_args()
-    args.plan = args.plan.resolve()
-    plan = read(args.plan)
-    if args.preflight:
-        report = preflight(plan)
-        report['signature'] = fingerprint(args.plan, plan)
-        save(args.plan.parent / 'preflight.json', report)
-        print(f"Preflight passed: {report['cells']} cells; no real calibration or measurement started")
-    else:
-        run(args, plan)
-
-
-if __name__ == '__main__':
-    main()

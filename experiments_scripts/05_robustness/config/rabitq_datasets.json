@@ -1,0 +1,49 @@
+{
+  "datasets": [
+    {
+      "dataset": "msmarco-qwen-1024-normalized",
+      "space": "cosine",
+      "dimension": 1024,
+      "train_count": 8840823,
+      "query_count": 1000,
+      "M": 32,
+      "efConstruction": 500,
+      "dataset_file": "msmarco-qwen-1024-normalized.hdf5",
+      "metric": "ip",
+      "normalize": true,
+      "rabitq_index": {
+        "file": "rabitq_b8/msmarco-qwen-1024-normalized-M32-efC500-b8-ip-normalized-hnsw-rabitq.index"
+      }
+    },
+    {
+      "dataset": "youtube-15M-angular",
+      "space": "cosine",
+      "dimension": 1024,
+      "train_count": 15686309,
+      "query_count": 1000,
+      "M": 32,
+      "efConstruction": 500,
+      "dataset_file": "youtube-15M-angular.hdf5",
+      "metric": "l2",
+      "normalize": true,
+      "rabitq_index": {
+        "file": "rabitq_b8/youtube-15M-angular-M32-efC500-b8-l2-normalized-hnsw-rabitq.index"
+      }
+    },
+    {
+      "dataset": "cohere-768-angular",
+      "space": "cosine",
+      "dimension": 768,
+      "train_count": 10000000,
+      "query_count": 1000,
+      "M": 32,
+      "efConstruction": 500,
+      "dataset_file": "cohere-768-angular.hdf5",
+      "metric": "ip",
+      "normalize": true,
+      "rabitq_index": {
+        "file": "rabitq_b8/cohere-768-angular-M32-efC500-b8-ip-normalized-hnsw-rabitq.index"
+      }
+    }
+  ]
+}

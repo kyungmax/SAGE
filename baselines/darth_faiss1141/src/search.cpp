@@ -12,6 +12,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 
 #include <omp.h>
 
@@ -77,14 +78,14 @@ std::array<double, 11> snapshot_features(
         int insertions,
         float first_nn) {
     auto& manager = predictor.data_manager;
-    // Match the frozen predictor's float-valued accessors and exact order.
+    // Match the corrected predictor's float-valued accessors and trainer order.
     return {double(nstep), double(ndis), double(insertions), double(first_nn),
             double(manager.get_nearest_dist_of_query(query)),
-            double(manager.get_avg_dist_of_query(query)),
             double(manager.get_furthest_dist_of_query(query)),
+            double(manager.get_avg_dist_of_query(query)),
             double(manager.get_variance_of_query(query)),
-            double(manager.get_percentile_of_query(query, 0.50)),
             double(manager.get_percentile_of_query(query, 0.25)),
+            double(manager.get_percentile_of_query(query, 0.50)),
             double(manager.get_percentile_of_query(query, 0.75))};
 }
 
@@ -140,6 +141,10 @@ faiss::HNSWStats search_query(
     int ndis = 0;
     int ndis_interval = 0;
     int nstep = 0;
+    // Observation only: original nstep continues to drive all model decisions.
+    int completed_expansions = 0;
+    int started_expansions = 0;
+    bool final_expansion_complete = false;
     int total_insertions = 0;
     int prediction_interval = predictor ? predictor->initial_prediction_interval : 0;
     int predictor_calls = 0;
@@ -180,6 +185,8 @@ faiss::HNSWStats search_query(
             diagnostic->expanded_nodes.push_back(expanded);
         }
 
+        ++started_expansions;
+        final_expansion_complete = false;
         size_t begin, end;
         hnsw.neighbor_range(expanded, 0, &begin, &end);
         size_t jmax = begin;
@@ -262,6 +269,8 @@ faiss::HNSWStats search_query(
                     ++ndis_interval;
                     early_terminate = add_to_heap(saved[part], values[part]);
                     if (early_terminate) {
+                        // Same completion boundary as the prior FAISS 1.8 collector.
+                        final_expansion_complete = (part + 1 == 4 && j + 1 == jmax);
                         break;
                     }
                 }
@@ -273,6 +282,7 @@ faiss::HNSWStats search_query(
         }
         // Deliberately before nstep++: this is the original mid-batch ET.
         if (early_terminate) {
+            if (final_expansion_complete) ++completed_expansions;
             break;
         }
         for (int part = 0; part < buffered; ++part) {
@@ -281,9 +291,11 @@ faiss::HNSWStats search_query(
             ++ndis_interval;
             early_terminate = add_to_heap(saved[part], value);
             if (early_terminate) {
+                final_expansion_complete = (part + 1 == buffered);
                 break;
             }
         }
+        if (!early_terminate || final_expansion_complete) ++completed_expansions;
         // Legacy leftover ET increments nstep, unlike a batch-4 ET.
         ++nstep;
         if ((!check_relative && nstep > ef_search) || early_terminate) {
@@ -307,6 +319,9 @@ faiss::HNSWStats search_query(
         diagnostic->actual_distance_evaluations = counted->count;
         diagnostic->logical_ndis = ndis;
         diagnostic->nstep = nstep;
+        diagnostic->completed_expansions = completed_expansions;
+        diagnostic->started_expansions = started_expansions;
+        diagnostic->unfinished_expansions = started_expansions - completed_expansions;
         diagnostic->insertions = total_insertions;
         diagnostic->predictor_calls = predictor_calls;
         diagnostic->final_interval = prediction_interval;
@@ -341,6 +356,90 @@ struct WorkerState {
 };
 
 } // namespace
+
+namespace {
+
+// Verify that cloning the named immutable model file really creates the same
+// model as the already-loaded source. This is initialization-only work: no file
+// access, hashing or model serialization happens during a search/prediction.
+std::string model_serialization(BoosterHandle handle) {
+    int64_t length = 0;
+    char placeholder = 0;
+    if (LGBM_BoosterSaveModelToString(handle, 0, -1,
+                C_API_FEATURE_IMPORTANCE_SPLIT, 1, &length, &placeholder) != 0 || length <= 0) {
+        throw std::runtime_error(std::string("Cannot identify DARTH model: ") + LGBM_GetLastError());
+    }
+    std::string result(size_t(length), '\0');
+    int64_t actual = 0;
+    if (LGBM_BoosterSaveModelToString(handle, 0, -1,
+                C_API_FEATURE_IMPORTANCE_SPLIT, length, &actual, result.data()) != 0 || actual != length) {
+        throw std::runtime_error(std::string("Cannot serialize DARTH model: ") + LGBM_GetLastError());
+    }
+    return result;
+}
+
+} // namespace
+
+PredictorPool::PredictorPool(const faiss::DARTHPredictorHNSW& source, int capacity)
+        : source_model_path_(source.model_path) {
+    if (capacity <= 0 || !source.booster || !source.booster_owner || source.model_path.empty() ||
+        source.booster_owner.get() != source.booster) {
+        throw std::invalid_argument("PredictorPool requires positive capacity and an owned loaded model");
+    }
+    const auto identity = model_serialization(source.booster);
+    models_.reserve(size_t(capacity));
+    models_.push_back({source.booster, source.booster_owner});
+    for (int worker = 1; worker < capacity; ++worker) {
+        // Preserve the existing clone method and independent LightGBM handles.
+        // Its temporary call bindings are discarded: only ownership survives.
+        auto clone = source.clone_for_worker();
+        if (model_serialization(clone.booster) != identity) {
+            throw std::invalid_argument("PredictorPool model file differs from the loaded source model");
+        }
+        models_.push_back({clone.booster, std::move(clone.booster_owner)});
+    }
+}
+
+int PredictorPool::capacity() const {
+    return int(models_.size());
+}
+
+void PredictorPool::validate_source(const faiss::DARTHPredictorHNSW& source) const {
+    const auto& model = models_.front();
+    if (source.booster != model.handle || source.model_path != source_model_path_ ||
+        source.booster_owner.get() != model.handle ||
+        source.booster_owner.owner_before(model.owner) || model.owner.owner_before(source.booster_owner)) {
+        throw std::invalid_argument("PredictorPool belongs to a different source model");
+    }
+}
+
+PredictorPool::Lease PredictorPool::acquire(const faiss::DARTHPredictorHNSW& source, int workers) {
+    std::unique_lock<std::mutex> lock(use_mutex_, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        throw std::runtime_error("PredictorPool is already leased by another search");
+    }
+    validate_source(source);
+    if (workers < 0 || workers > capacity()) {
+        throw std::invalid_argument("PredictorPool capacity is smaller than the requested worker count");
+    }
+    return Lease(*this, workers, std::move(lock));
+}
+
+PredictorPool::Lease::Lease(PredictorPool& pool, int workers, std::unique_lock<std::mutex> lock)
+        : pool_(&pool), workers_(workers), lock_(std::move(lock)) {}
+
+faiss::DARTHPredictorHNSW PredictorPool::Lease::bind_worker(
+        const faiss::DARTHPredictorHNSW& current, int worker) const {
+    if (!lock_.owns_lock() || worker < 0 || worker >= workers_) {
+        throw std::invalid_argument("PredictorPool worker binding requires an active lease and valid worker");
+    }
+    pool_->validate_source(current);
+    auto bound = current;
+    const auto& model = pool_->models_[size_t(worker)];
+    bound.booster = model.handle;
+    bound.booster_owner = model.owner;
+    return bound;
+}
 
 void search(
         faiss::IndexHNSWFlat& index,
@@ -389,6 +488,9 @@ void search(
                         data.nq == n && data.k == k && data.d == index.d,
                 "DARTH data_manager must refer to the current search outputs and shape");
     }
+    FAISS_THROW_IF_NOT_MSG(!options.predictor_pool ||
+                    (predictor && options.mode != Mode::Vanilla),
+            "PredictorPool requires a non-vanilla predictor search");
     if (options.diagnostics) {
         options.diagnostics->clear();
         options.diagnostics->resize(size_t(n));
@@ -396,6 +498,14 @@ void search(
 
     const auto setup_started = Clock::now();
     const int workers_count = int(std::min<idx_t>(n, options.threads));
+    // Declare the lease before all call-local predictors/workspaces. It is held
+    // until every worker joins and those bindings are destroyed, including on
+    // exceptions. A rejected concurrent call never reaches a model prediction.
+    std::unique_ptr<PredictorPool::Lease> pool_lease;
+    if (options.predictor_pool) {
+        pool_lease = std::make_unique<PredictorPool::Lease>(
+                options.predictor_pool->acquire(*predictor, workers_count));
+    }
     std::unique_ptr<faiss::DARTHPredictorHNSW> base;
     if (predictor && options.mode != Mode::Vanilla) {
         base = std::make_unique<faiss::DARTHPredictorHNSW>(*predictor);
@@ -411,7 +521,8 @@ void search(
     if (base) {
         predictors.reserve(workers_count);
         for (int worker = 0; worker < workers_count; ++worker) {
-            predictors.push_back(worker == 0 ? *base : base->clone_for_worker());
+            predictors.push_back(pool_lease ? pool_lease->bind_worker(*base, worker) :
+                    (worker == 0 ? *base : base->clone_for_worker()));
         }
     }
     BlockResultHandler results(size_t(n), distances, labels, size_t(k));

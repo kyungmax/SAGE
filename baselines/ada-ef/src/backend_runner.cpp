@@ -931,13 +931,14 @@ void write_per_query_csv(const Config& cfg,
                          const hnswdis::MatrixXi& neighbors,
                          const hnswdis::ApproximatedScoreCalculator& score_calculator,
                          hnswdis::EfAdapter& adapter,
-                         const std::shared_ptr<hnswlib::HierarchicalNSW<float>>& index) {
+                         const std::shared_ptr<hnswlib::HierarchicalNSW<float>>& index,
+                         const std::vector<std::vector<size_t>>& expected_labels) {
     if (cfg.per_query_csv.empty()) {
         return;
     }
     ensure_parent(cfg.per_query_csv);
     std::ofstream out(cfg.per_query_csv);
-    out << "dataset,qid,initial_ef,chosen_ef,score,recall,latency_ms\n";
+    out << "dataset,qid,initial_ef,chosen_ef,score,recall,latency_ms,completed_expansions,instrumentation_labels_distances_equal\n";
 
     hnswdis::Sketch sketch(adapter.get_ef_recall_estimators(), adapter.get_expected_recall());
     const size_t initial_ef = std::max(static_cast<size_t>(adapter.get_wae()),
@@ -951,7 +952,21 @@ void write_per_query_csv(const Config& cfg,
             score_calculator,
             &sketch);
         auto query_end = Clock::now();
+        size_t completed_steps = 0;
+        auto observed = index->adaptiveSearchKnnTest<true>(
+            queries.row(i).data(), static_cast<size_t>(cfg.k), cfg.statics_length,
+            score_calculator, &sketch, nullptr, &completed_steps);
+        auto reference = queue;
+        if (reference.size() != observed.size())
+            throw std::runtime_error("Ada-EF work counter changed result size");
+        while (!reference.empty()) {
+            if (reference.top() != observed.top())
+                throw std::runtime_error("Ada-EF work counter changed labels/distances");
+            reference.pop(); observed.pop();
+        }
         std::vector<size_t> labels = labels_from_queue(std::move(queue));
+        if (labels != expected_labels[i])
+            throw std::runtime_error("Ada-EF work replay differs from measured labels");
 
         auto score_queue = index->adaptiveSearchKnn(
             queries.row(i).data(),
@@ -970,7 +985,8 @@ void write_per_query_csv(const Config& cfg,
             << chosen_ef << ","
             << score << ","
             << recall_one(neighbors, labels, i, cfg.k) << ","
-            << elapsed_ms(query_start, query_end) << "\n";
+            << elapsed_ms(query_start, query_end) << ","
+            << completed_steps << ",1\n";
     }
 }
 
@@ -1054,7 +1070,7 @@ void run_online(const Config& cfg, const ArtifactPaths& paths, const std::string
     }
     write_online_json(cfg, paths, metric, stats, adapter.get_wae());
     if (cfg.e2e_timing && metric == "cd") normalize_matrix(*queries);
-    write_per_query_csv(cfg, *queries, *neighbors, score_calculator, adapter, loaded.index);
+    write_per_query_csv(cfg, *queries, *neighbors, score_calculator, adapter, loaded.index, labels);
 
 }
 
