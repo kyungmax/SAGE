@@ -5,13 +5,15 @@ Run the commands below from the repository root.
 
 ## Experiments
 
+Each directory guide below lists its prerequisites and execution order.
+
 | Directory | Experiments | Entry points |
 | --- | --- | --- |
-| [01_main_results](experiments_scripts/01_main_results/) | Recall/latency curves, matched-recall comparisons, Recall@100 | [run.sh](experiments_scripts/01_main_results/run.sh), [run_adaef.py](experiments_scripts/01_main_results/run_adaef.py), [run_darth_pipeline.py](experiments_scripts/01_main_results/run_darth_pipeline.py) |
-| [02_detailed_analysis](experiments_scripts/02_detailed_analysis/) | Performance by query difficulty, misclassification, shadow contribution | [run_drilldown.py](experiments_scripts/02_detailed_analysis/run_drilldown.py), [run_misclassification.py](experiments_scripts/02_detailed_analysis/run_misclassification.py), [run_shadow.py](experiments_scripts/02_detailed_analysis/run_shadow.py) |
-| [03_calibration](experiments_scripts/03_calibration/) | Recommended ef quality, offline calibration time, sampling stability, pseudo-ground-truth validation | [run.py](experiments_scripts/03_calibration/run.py) |
-| [04_parameter_sensitivity](experiments_scripts/04_parameter_sensitivity/) | CFR window W, number of tiers B, safety margin g | [run.py](experiments_scripts/04_parameter_sensitivity/run.py) |
-| [05_robustness](experiments_scripts/05_robustness/) | Embedding quality, quantized HNSW (RaBitQ) | [run.py](experiments_scripts/05_robustness/run.py), [report.py](experiments_scripts/05_robustness/report.py) |
+| [01_main_results](experiments_scripts/01_main_results/README.md) | Recall/latency curves, matched-recall comparisons, Recall@100 | [run.sh](experiments_scripts/01_main_results/run.sh), [run_adaef.py](experiments_scripts/01_main_results/run_adaef.py), [run_darth_pipeline.py](experiments_scripts/01_main_results/run_darth_pipeline.py) |
+| [02_detailed_analysis](experiments_scripts/02_detailed_analysis/README.md) | Performance by query difficulty, misclassification, shadow contribution | [run_drilldown.py](experiments_scripts/02_detailed_analysis/run_drilldown.py), [run_misclassification.py](experiments_scripts/02_detailed_analysis/run_misclassification.py), [run_shadow.py](experiments_scripts/02_detailed_analysis/run_shadow.py) |
+| [03_calibration](experiments_scripts/03_calibration/README.md) | Recommended ef quality, offline calibration time, sampling stability, pseudo-ground-truth validation | [run.py](experiments_scripts/03_calibration/run.py) |
+| [04_parameter_sensitivity](experiments_scripts/04_parameter_sensitivity/README.md) | CFR window W, number of tiers B, safety margin g | [run.py](experiments_scripts/04_parameter_sensitivity/run.py) |
+| [05_robustness](experiments_scripts/05_robustness/README.md) | Embedding quality, quantized HNSW (RaBitQ) | [run.py](experiments_scripts/05_robustness/run.py), [report.py](experiments_scripts/05_robustness/report.py) |
 
 ## Build
 
