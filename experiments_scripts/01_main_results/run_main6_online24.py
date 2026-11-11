@@ -6,8 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from main6_common import (ROOT, RUN_ROOT, effective_config, resolve_datasets,
-                         validate_policy_config, validate_timing_config)
+from main6_common import ROOT, RUN_ROOT, effective_config, resolve_datasets, validate_policy_config
 
 CONFIG = ROOT / 'config/main6_online24'
 CELLS = ('faiss', 'hnswlib', 'pip', 'abs')
@@ -31,7 +30,6 @@ def main():
         setattr(args, key, getattr(args, key).resolve())
     config = json.loads(args.config.read_text())
     validate_policy_config(config)
-    validate_timing_config(config)
     cells = config['run_order'] if args.command == 'run-all' else [args.cell]
     ks = config['k_values'] if args.k == 'all' else [int(args.k)]
     if args.preflight:

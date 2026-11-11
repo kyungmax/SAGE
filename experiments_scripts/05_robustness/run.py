@@ -122,24 +122,25 @@ def selected_inputs(args, config):
 
 
 def protocol(args):
-    from main6_common import validate_policy_config, validate_timing_config
+    from main6_common import validate_policy_config
     config = read(args.config)
     if args.cpus:
         config['timing']['cpus'] = [int(cpu) for cpu in args.cpus.split(',')]
         config['online_threads'] = config['offline_threads'] = len(config['timing']['cpus'])
     if args.numa_node is not None:
         config['timing']['numa_node'] = args.numa_node
-    validate_timing_config(config)
-    cpus = config['timing'].get('cpus')
-    if cpus:
-        require(set(cpus) <= os.sched_getaffinity(0), 'Configured CPUs are unavailable; pass --cpus')
-        cores = []
-        for cpu in cpus:
-            topology = Path(f'/sys/devices/system/cpu/cpu{cpu}/topology')
-            cores.append(((topology / 'physical_package_id').read_text().strip(),
-                          (topology / 'core_id').read_text().strip()))
-        require(len(set(cores)) == len(cpus), 'Choose one logical CPU per physical core')
-    config['timing']['shared_physical_cores'] = len(cpus) if cpus else None
+    cpus = config['timing']['cpus']
+    require(cpus and len(cpus) == len(set(cpus)), 'Set a nonempty, distinct CPU list')
+    require(set(cpus) <= os.sched_getaffinity(0), 'Configured CPUs are unavailable; pass --cpus')
+    cores = []
+    for cpu in cpus:
+        topology = Path(f'/sys/devices/system/cpu/cpu{cpu}/topology')
+        cores.append(((topology / 'physical_package_id').read_text().strip(),
+                      (topology / 'core_id').read_text().strip()))
+    require(len(set(cores)) == len(cpus), 'Choose one logical CPU per physical core')
+    config['timing']['shared_physical_cores'] = len(cpus)
+    require(len(cpus) == config['offline_threads'] == config['online_threads'],
+            'CPU count must equal offline_threads and online_threads')
     require(config['k'] == 10 and config['timed_repeats'] == 5 and
             config['warmups_per_setting'] >= 1, 'Use k10, five measured runs and separate warmup')
     validate_policy_config(config)
@@ -164,8 +165,7 @@ def native_preflight(experiment):
                 'Missing local SAGE API; rebuild FAISS')
         return dict(module=faiss.__file__, version=faiss.__version__)
     finally:
-        if os.sched_getaffinity(0) != affinity:
-            os.sched_setaffinity(0, affinity)
+        os.sched_setaffinity(0, affinity)
 
 
 def source_signature(experiment):
@@ -192,9 +192,7 @@ def worker(args):
     require(source_signature(args.experiment) == manifest['sources'], 'Sources changed since launch')
     verify_inputs(entries)
     entry = next(row for row in entries if row['dataset'] == args.worker)
-    cpus = config['timing'].get('cpus')
-    if cpus:
-        os.sched_setaffinity(0, cpus)
+    os.sched_setaffinity(0, config['timing']['cpus'])
     if args.experiment == 'rabitq':
         benchmark = importlib.import_module('experiments_scripts.rabitq.benchmark')
         benchmark.cell_run(config, entry, 10, args.output / 'results' / args.worker)
@@ -211,7 +209,6 @@ def worker(args):
 
 
 def execute(args, config, entries, report):
-    from main6_common import with_numa_binding
     from run_baselines_main6 import environment
     require(not args.output.exists(), f'Use a new output directory: {args.output}')
     args.output.mkdir(parents=True)
@@ -236,7 +233,10 @@ def execute(args, config, entries, report):
                 command = ['bash', str(ROOT / 'scripts/python.sh'), str(Path(__file__).resolve()),
                            args.experiment, '--output', str(args.output), '--worker', entry['dataset'],
                            '--phase', phase]
-                command = with_numa_binding(command, config)
+                node = config['timing'].get('numa_node')
+                if node is not None:
+                    command = ['numactl', '--physcpubind=' + ','.join(map(str, config['timing']['cpus'])),
+                               '--membind=' + str(node), *command]
                 print(f'{entry["dataset"]}: {phase}', flush=True)
                 with (args.output / 'logs' / f'{entry["dataset"]}.{phase}.log').open('x') as log:
                     subprocess.run(command, env=env, stdout=log, stderr=subprocess.STDOUT, check=True,

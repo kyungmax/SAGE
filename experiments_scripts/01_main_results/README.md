@@ -6,7 +6,7 @@ Run from the repository root after the [build and data setup](../../README.md).
 
 Set the paths in [datasets.json](config/main6_online24/datasets.json) and the
 thread counts in [experiment.json](config/main6_online24/experiment.json).
-CPU/NUMA binding is disabled by default.
+The runner applies the CPU/NUMA settings from that configuration.
 For copies, pass `--config` and `--datasets-config` to each `run.sh` command.
 Use a fresh `--output` directory for another run; the examples use default paths.
 If you change it, update the later `--targets` and `--input` paths to match.

@@ -27,11 +27,6 @@ def dataset(entry):
 
 
 def cell_run(plan, entry, k, folder):
-    cpus = plan['timing'].get('cpus')
-    if cpus:
-        os.sched_setaffinity(0, cpus)
-    expected_cpus = sorted(cpus or os.sched_getaffinity(0))
-
     import h5py
     import numpy as np
     from experiments_scripts.rabitq.final_policy import load_library, calibrate_policy, query
@@ -44,14 +39,14 @@ def cell_run(plan, entry, k, folder):
         save(folder / 'status.json', dict(stage=name, time=time.time(), pid=os.getpid(), **details))
         print(f"[{entry['dataset']} k={k}] {name} {details}", flush=True)
 
+    os.sched_setaffinity(0, plan['timing']['cpus'])
     data = dataset(entry)
     stage('loading_index')
     started = time.perf_counter()
     index = load_library().HnswIndex.load(entry['index_path'])
     validate_index(index, data, SimpleNamespace(**entry))
-    require_search_affinity(expected_cpus)
+    require_search_affinity(plan['timing']['cpus'])
     save(folder / 'runtime_affinity.json', dict(pid=os.getpid(), cpus=sorted(os.sched_getaffinity(0)),
-         configured_cpus=cpus or None,
          native_threading='std::thread', omp_proc_bind=os.environ.get('OMP_PROC_BIND'),
          omp_places=os.environ.get('OMP_PLACES'), threads=threads))
     load_seconds = time.perf_counter() - started
@@ -63,7 +58,7 @@ def cell_run(plan, entry, k, folder):
     stage('calibrating')
     policy = calibrate_policy(index, train_vectors=data.read, k=k, num_threads=threads,
                               min_ef=64, shadow_enabled=k != 100, curve_efs=sage_grid)
-    require_search_affinity(expected_cpus)
+    require_search_affinity(plan['timing']['cpus'])
     save(folder / 'policy.json', policy)
     offline = dict(dataset=entry['dataset'], backend='rabitq', k=k,
                    recommended_ef=policy['ef_init'], offline_cap=policy['cap_history'][-1]['cap'],
@@ -88,7 +83,7 @@ def cell_run(plan, entry, k, folder):
 
     def call(job, diagnostic=False):
         method, ef = job
-        require_search_affinity(expected_cpus)
+        require_search_affinity(plan['timing']['cpus'])
         begin = time.perf_counter()
         prepared = data.prepare(vectors)
         if method == 'vanilla':

@@ -38,9 +38,8 @@ Target recalls rounded in CSV are never converted back into hits.
 The timing scope is the whole batch Python/API call including query preparation
 and output allocation, excluding index load, parameter selection, GT evaluation
 and file output. All final workers must acquire the configured `timing.lock_file`;
-baseline workers use fresh child processes for tuning and final measurement.
-CPU/NUMA binding is off by default. An explicit `timing.cpus` list enables CPU
-binding; an explicit `timing.numa_node` enables memory binding with `numactl`.
+baseline workers use fresh child processes for tuning and final measurement and
+enforce the configured CPU mask and NUMA memory policy with `numactl`.
 
 Selection uses evaluation ground truth retrospectively. ABS refines a gamma
 bracket to 1e-6 through the configured cap (currently 3.2), checks nearby ticks,
