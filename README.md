@@ -3,6 +3,16 @@
 SAGE implements adaptive HNSW search in FAISS, hnswlib, and RaBitQ.
 Run the commands below from the repository root.
 
+## Experiments
+
+| Directory | Experiments | Entry points |
+| --- | --- | --- |
+| [01_main_results](experiments_scripts/01_main_results/) | Recall/latency curves, matched-recall comparisons, Recall@100 | [run.sh](experiments_scripts/01_main_results/run.sh), [run_adaef.py](experiments_scripts/01_main_results/run_adaef.py), [run_darth_pipeline.py](experiments_scripts/01_main_results/run_darth_pipeline.py) |
+| [02_detailed_analysis](experiments_scripts/02_detailed_analysis/) | Performance by query difficulty, misclassification, shadow contribution | [run_drilldown.py](experiments_scripts/02_detailed_analysis/run_drilldown.py), [run_misclassification.py](experiments_scripts/02_detailed_analysis/run_misclassification.py), [run_shadow.py](experiments_scripts/02_detailed_analysis/run_shadow.py) |
+| [03_calibration](experiments_scripts/03_calibration/) | Recommended ef quality, offline calibration time, sampling stability, pseudo-ground-truth validation | [run.py](experiments_scripts/03_calibration/run.py) |
+| [04_parameter_sensitivity](experiments_scripts/04_parameter_sensitivity/) | CFR window W, number of tiers B, safety margin g | [run.py](experiments_scripts/04_parameter_sensitivity/run.py) |
+| [05_robustness](experiments_scripts/05_robustness/) | Embedding quality, quantized HNSW (RaBitQ) | [run.py](experiments_scripts/05_robustness/run.py), [report.py](experiments_scripts/05_robustness/report.py) |
+
 ## Build
 
 Use Linux, a C++20 compiler, CMake 3.24+, and an AVX-512 CPU for the supplied
@@ -142,12 +152,9 @@ bash scripts/python.sh experiments_scripts/01_main_results/run_darth_pipeline.py
 Repeat per dataset; Ada-EF supports the five cosine datasets only. Both commands
 accept `--preflight` to check inputs before execution.
 
-Additional experiment entry points are listed below. Run each with
-`bash scripts/python.sh PATH --help` for its required inputs and output options.
-
-| Experiment | Entry point | Inputs |
-| --- | --- | --- |
-| Detailed analysis | [run_drilldown.py](experiments_scripts/02_detailed_analysis/run_drilldown.py), [run_misclassification.py](experiments_scripts/02_detailed_analysis/run_misclassification.py), [run_shadow.py](experiments_scripts/02_detailed_analysis/run_shadow.py) | Dataset, FAISS graph, completed main policy and adjacent receipts |
-| Calibration | [03_calibration/run.py](experiments_scripts/03_calibration/run.py) | `--dataset`, `--catalog`, `--experiment all`, `--output-root` |
-| Parameter sensitivity | [04_parameter_sensitivity/run.py](experiments_scripts/04_parameter_sensitivity/run.py) | `--dataset`, `--catalog`, `--output-root` |
-| Robustness | [05_robustness/run.py](experiments_scripts/05_robustness/run.py) | `embedding` or `rabitq`, with its own [input catalogs](experiments_scripts/05_robustness/config/) |
+For the other [experiments](#experiments), run `bash scripts/python.sh PATH --help`
+for required inputs and output options. Detailed analysis consumes a completed
+FAISS main policy and its adjacent receipts. Calibration and parameter sensitivity
+use `--dataset`, `--catalog`, and `--output-root`; calibration also selects
+`--experiment`. Robustness uses `embedding` or `rabitq` with its own
+[input catalogs](experiments_scripts/05_robustness/config/).
