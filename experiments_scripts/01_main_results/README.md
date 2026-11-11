@@ -203,7 +203,14 @@ options, source files, Python environment and CPU affinity unchanged when resumi
 | `summary.csv`, `complete.json` | Final test summary and whole-pipeline completion record |
 
 Preparation builds a nearly full-size auxiliary graph and runs exact searches
-for both holdout splits. Training streams the CSV but keeps **all selected
+for both holdout splits. Report preparation overhead with the auxiliary-index
+preparation stage excluded: `data/prepared.json`'s `timings.total_seconds` minus
+`timings.auxiliary_build_seconds`, plus `training/training.json`'s `total_seconds`.
+This retains exact GT generation, trace collection and model training. Keep the
+original stage timings separately; the excluded stage also includes streaming
+input processing, serialization and reload verification.
+
+Training streams the CSV but keeps **all selected
 feature rows in RAM** for model fitting. Allow memory and disk for those steps.
 `--learn-queries`, `--validation-queries` and `--seed` can change the defaults
 for a bounded validation run; record such changes as departures from the paper
