@@ -342,6 +342,11 @@ struct SageLevel0SearchResult {
     size_t full_pop_count = 0;
     size_t window_obs_count = 0;
     size_t shadow_decision_step = 0;
+    size_t shadow_obs_count = 0;
+    size_t shadow_window_obs_count = 0;
+    float shadow_mean_cfr_classify_window =
+            std::numeric_limits<float>::quiet_NaN();
+    bool shadow_usable_for_mean_window = false;
     float mean_cfr_classify_window =
             std::numeric_limits<float>::quiet_NaN();
     bool usable_for_mean_window = false;
@@ -395,16 +400,18 @@ static SageLevel0SearchResult sage_search_level0_hidden(
         float* out_distances,
         idx_t* out_labels,
         SageTraceOutputs* trace,
-        idx_t trace_row) {
+        idx_t trace_row,
+        bool include_shadow = false) {
     SageLevel0SearchResult result;
     const HNSW& hnsw = index.hnsw;
     const IDSelector* sel = params ? params->sel : nullptr;
     const SageCfrWindowConfig cfr_config =
             sage_resolve_cfr_window_config(params);
+    const bool collect_shadow = cfr_config.shadow_observation || include_shadow;
     const size_t normalized_k = std::max<size_t>(static_cast<size_t>(k), 1);
     const size_t ef_search = std::max<size_t>(static_cast<size_t>(ef), normalized_k);
     FAISS_THROW_IF_NOT_MSG(
-            !cfr_config.shadow_observation || ef_search >= 128,
+            !collect_shadow || ef_search >= 128,
             "Shadow CFR summary requires ef >= 128");
     const float nan = std::numeric_limits<float>::quiet_NaN();
 
@@ -429,11 +436,11 @@ static SageLevel0SearchResult sage_search_level0_hidden(
     std::priority_queue<HNSW::Node> shadow_candidates;
     size_t shadow_obs_count = 0, shadow_window_count = 0;
     float shadow_window_sum = 0.0f;
-    if (cfr_config.shadow_observation && (!sel || sel->is_member(nearest))) {
+    if (collect_shadow && (!sel || sel->is_member(nearest))) {
         shadow_candidates.emplace(d_nearest, nearest);
     }
     auto observe_shadow = [&](float candidate_distance) {
-        if (!cfr_config.shadow_observation || result.shadow_decision_step > 0 ||
+        if (!collect_shadow || result.shadow_decision_step > 0 ||
             shadow_candidates.size() < 128) {
             return;
         }
@@ -503,7 +510,7 @@ static SageLevel0SearchResult sage_search_level0_hidden(
                 candidate_set.emplace(dis, v);
                 accepted_count++;
                 if (!sel || sel->is_member(v)) {
-                    if (cfr_config.shadow_observation && result.shadow_decision_step == 0) {
+                    if (collect_shadow && result.shadow_decision_step == 0) {
                         shadow_candidates.emplace(dis, v);
                         if (shadow_candidates.size() > 128) {
                             shadow_candidates.pop();
@@ -613,14 +620,20 @@ static SageLevel0SearchResult sage_search_level0_hidden(
     result.usable_for_mean_window =
             full_pop_count >= static_cast<size_t>(cfr_config.classify_end) &&
             std::isfinite(result.mean_cfr_classify_window);
-    if (cfr_config.shadow_observation) {
-        result.full_pop_count = shadow_obs_count;
-        result.window_obs_count = shadow_window_count;
-        result.mean_cfr_classify_window = shadow_window_count > 0
+    if (collect_shadow) {
+        result.shadow_obs_count = shadow_obs_count;
+        result.shadow_window_obs_count = shadow_window_count;
+        result.shadow_mean_cfr_classify_window = shadow_window_count > 0
                 ? shadow_window_sum / static_cast<float>(shadow_window_count)
                 : nan;
-        result.usable_for_mean_window = result.shadow_decision_step > 0 &&
-                std::isfinite(result.mean_cfr_classify_window);
+        result.shadow_usable_for_mean_window = result.shadow_decision_step > 0 &&
+                std::isfinite(result.shadow_mean_cfr_classify_window);
+    }
+    if (cfr_config.shadow_observation) {
+        result.full_pop_count = result.shadow_obs_count;
+        result.window_obs_count = result.shadow_window_obs_count;
+        result.mean_cfr_classify_window = result.shadow_mean_cfr_classify_window;
+        result.usable_for_mean_window = result.shadow_usable_for_mean_window;
     }
     result.closest_dist = sage_external_distance(best_raw_distance, similarity_metric);
 
@@ -1952,7 +1965,13 @@ void IndexHNSW::search_layer0_cfr_summary(
         float* mean_cfrs,
         float* closest_dists,
         const SearchParameters* params,
-        uint64_t* decision_steps) const {
+        uint64_t* decision_steps,
+        bool include_shadow,
+        uint64_t* shadow_full_pop_counts,
+        uint64_t* shadow_window_obs_counts,
+        uint64_t* shadow_usable_flags,
+        float* shadow_mean_cfrs,
+        uint64_t* shadow_decision_steps) const {
     FAISS_THROW_IF_NOT_MSG(
             storage,
             "No storage index, please use IndexHNSWFlat (or variants) "
@@ -1967,6 +1986,18 @@ void IndexHNSW::search_layer0_cfr_summary(
     FAISS_THROW_IF_NOT(distance_counts);
     FAISS_THROW_IF_NOT(mean_cfrs);
     FAISS_THROW_IF_NOT(closest_dists);
+
+    if (include_shadow) {
+        FAISS_THROW_IF_NOT_MSG(
+                !sage_resolve_cfr_window_config(params).shadow_observation,
+                "include_shadow cannot be combined with shadow_observation");
+        FAISS_THROW_IF_NOT_MSG(ef >= 128, "Shadow CFR summary requires ef >= 128");
+        FAISS_THROW_IF_NOT(shadow_full_pop_counts);
+        FAISS_THROW_IF_NOT(shadow_window_obs_counts);
+        FAISS_THROW_IF_NOT(shadow_usable_flags);
+        FAISS_THROW_IF_NOT(shadow_mean_cfrs);
+        FAISS_THROW_IF_NOT(shadow_decision_steps);
+    }
 
     const bool similarity_metric = is_similarity_metric(this->metric_type);
     const HNSW& hnsw = this->hnsw;
@@ -2005,6 +2036,13 @@ void IndexHNSW::search_layer0_cfr_summary(
                     if (decision_steps) {
                         decision_steps[i] = 0;
                     }
+                    if (include_shadow) {
+                        shadow_full_pop_counts[i] = 0;
+                        shadow_window_obs_counts[i] = 0;
+                        shadow_usable_flags[i] = 0;
+                        shadow_mean_cfrs[i] = std::numeric_limits<float>::quiet_NaN();
+                        shadow_decision_steps[i] = 0;
+                    }
                     closest_dists[i] = std::numeric_limits<float>::infinity();
 
                     dis->set_query(x + i * this->d);
@@ -2025,7 +2063,8 @@ void IndexHNSW::search_layer0_cfr_summary(
                                 nullptr,
                                 nullptr,
                                 nullptr,
-                                i);
+                                i,
+                                include_shadow);
                         full_pop_counts[i] = static_cast<uint64_t>(stats.full_pop_count);
                         window_obs_counts[i] = static_cast<uint64_t>(stats.window_obs_count);
                         usable_flags[i] = stats.usable_for_mean_window ? 1 : 0;
@@ -2034,6 +2073,13 @@ void IndexHNSW::search_layer0_cfr_summary(
                         mean_cfrs[i] = stats.mean_cfr_classify_window;
                         if (decision_steps) {
                             decision_steps[i] = stats.shadow_decision_step;
+                        }
+                        if (include_shadow) {
+                            shadow_full_pop_counts[i] = stats.shadow_obs_count;
+                            shadow_window_obs_counts[i] = stats.shadow_window_obs_count;
+                            shadow_usable_flags[i] = stats.shadow_usable_for_mean_window ? 1 : 0;
+                            shadow_mean_cfrs[i] = stats.shadow_mean_cfr_classify_window;
+                            shadow_decision_steps[i] = stats.shadow_decision_step;
                         }
                         closest_dists[i] = stats.closest_dist;
                         n1 += 1;

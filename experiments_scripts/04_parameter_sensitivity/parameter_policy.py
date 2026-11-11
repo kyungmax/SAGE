@@ -49,10 +49,13 @@ class Calibration:
     def fit_branch(self, *, W, rank, routes, margin, shadow):
         key = (W, shadow)
         if key not in self.observations:
-            self.observations[key] = self.index.search_layer0_cfr_summary(
+            observation = self.index.search_layer0_cfr_summary(
                 self.vectors, k=10, ef=self.ef, hide_labels=self.ids, num_threads=self.threads,
-                classify_start=1, classify_end=W, shadow_observation=shadow,
+                classify_start=1, classify_end=W, include_shadow=self.ef >= 256,
                 shadow_pre_expansion=True)
+            self.observations[(W, False)] = observation
+            if self.ef >= 256:
+                self.observations[(W, True)] = observation['shadow']
         observation = self.observations[key]
         signal = np.asarray(observation['mean_cfrs'], dtype=np.float32)
         mask = np.asarray(observation['usable_flags'], dtype=bool) & np.isfinite(signal)

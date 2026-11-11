@@ -507,7 +507,8 @@ class Index {
         int classify_start = 1,
         int classify_end = 16,
         bool shadow_observation = false,
-        bool shadow_pre_expansion = true
+        bool shadow_pre_expansion = true,
+        bool include_shadow = false
     ) {
         hnswlib::HierarchicalNSW<dist_t>::validateCfrWindowConfig(
             classify_start,
@@ -516,7 +517,10 @@ class Index {
         const int CLASSIFY_START = classify_start;
         const int CLASSIFY_END = classify_end;
 
-        if (shadow_observation && ef < 128) {
+        if (include_shadow && shadow_observation) {
+            throw std::invalid_argument("include_shadow cannot be combined with shadow_observation.");
+        }
+        if ((shadow_observation || include_shadow) && ef < 128) {
             throw std::invalid_argument("Shadow observation requires ef >= 128.");
         }
 
@@ -539,6 +543,11 @@ class Index {
         auto mean_cfrs = py::array_t<float>(rows);
         auto closest_dists = py::array_t<float>(rows);
         auto decision_steps = py::array_t<uint64_t>(rows);
+        auto shadow_full_pop_counts = py::array_t<uint64_t>(include_shadow ? rows : 0);
+        auto shadow_window_obs_counts = py::array_t<uint64_t>(include_shadow ? rows : 0);
+        auto shadow_usable_flags = py::array_t<uint64_t>(include_shadow ? rows : 0);
+        auto shadow_mean_cfrs = py::array_t<float>(include_shadow ? rows : 0);
+        auto shadow_decision_steps = py::array_t<uint64_t>(include_shadow ? rows : 0);
 
         uint64_t* fpc = (uint64_t*)full_pop_counts.request().ptr;
         uint64_t* woc = (uint64_t*)window_obs_counts.request().ptr;
@@ -547,6 +556,11 @@ class Index {
         float* msc = (float*)mean_cfrs.request().ptr;
         float* cd = (float*)closest_dists.request().ptr;
         uint64_t* ds = decision_steps.mutable_data();
+        uint64_t* shadow_fpc = shadow_full_pop_counts.mutable_data();
+        uint64_t* shadow_woc = shadow_window_obs_counts.mutable_data();
+        uint64_t* shadow_uf = shadow_usable_flags.mutable_data();
+        float* shadow_msc = shadow_mean_cfrs.mutable_data();
+        uint64_t* shadow_ds = shadow_decision_steps.mutable_data();
 
         {
             std::vector<float> norm_array;
@@ -571,50 +585,61 @@ class Index {
                         hidden_internal_ids[row]
                     );
 
-                int observed_full_pop = 0;
-                int window_obs = 0;
-                double window_sum = 0.0;
-                float shadow_sum = 0.0f;
-                size_t step_number = 0;
-                ds[row] = 0;
-                for (const auto& s : steps) {
-                    ++step_number;
-                    float cfr = s.runtime_cfr;
-                    if (shadow_observation) {
-                        const float boundary = shadow_pre_expansion
-                            ? s.shadow_128_dist_before : s.shadow_128_dist;
-                        if (!std::isfinite(boundary) || std::fabs(boundary) <= 1e-6f) {
+                // Summarize independent windows from the same uncut traversal.
+                // Keep the legacy accumulation precision for each observer.
+                auto summarize_steps = [&](bool use_shadow, uint64_t* out_fpc,
+                                           uint64_t* out_woc, uint64_t* out_uf,
+                                           float* out_mean, uint64_t* out_ds) {
+                    int observed_full_pop = 0;
+                    int window_obs = 0;
+                    double window_sum = 0.0;
+                    float shadow_sum = 0.0f;
+                    size_t step_number = 0;
+                    out_ds[row] = 0;
+                    for (const auto& s : steps) {
+                        ++step_number;
+                        float cfr = s.runtime_cfr;
+                        if (use_shadow) {
+                            const float boundary = shadow_pre_expansion
+                                ? s.shadow_128_dist_before : s.shadow_128_dist;
+                            if (!std::isfinite(boundary) || std::fabs(boundary) <= 1e-6f) {
+                                continue;
+                            }
+                            cfr = s.popped_query_dist / std::max(boundary, 1e-6f);
+                        } else if (!std::isfinite(cfr)) {
                             continue;
                         }
-                        cfr = s.popped_query_dist / std::max(boundary, 1e-6f);
-                    } else if (!std::isfinite(cfr)) {
-                        continue;
+                        observed_full_pop += 1;
+                        if (observed_full_pop >= CLASSIFY_START &&
+                            observed_full_pop <= CLASSIFY_END) {
+                            if (use_shadow) shadow_sum += cfr;
+                            else window_sum += (double)cfr;
+                            window_obs += 1;
+                        }
+                        if (observed_full_pop >= CLASSIFY_END) {
+                            out_ds[row] = step_number;
+                            break;
+                        }
                     }
-                    observed_full_pop += 1;
-                    if (observed_full_pop >= CLASSIFY_START &&
-                        observed_full_pop <= CLASSIFY_END) {
-                        if (shadow_observation) shadow_sum += cfr;
-                        else window_sum += (double)cfr;
-                        window_obs += 1;
-                    }
-                    if (observed_full_pop >= CLASSIFY_END) {
-                        ds[row] = step_number;
-                        break;
-                    }
+
+                    double mean_window = window_obs > 0
+                        ? (use_shadow ? (double)(shadow_sum / (float)window_obs)
+                                      : window_sum / (double)window_obs)
+                        : std::numeric_limits<double>::quiet_NaN();
+                    bool usable = (observed_full_pop >= CLASSIFY_END) &&
+                        std::isfinite(mean_window);
+
+                    out_fpc[row] = (uint64_t)std::min(observed_full_pop, CLASSIFY_END);
+                    out_woc[row] = (uint64_t)window_obs;
+                    out_uf[row] = usable ? 1u : 0u;
+                    out_mean[row] = (float)mean_window;
+                };
+                summarize_steps(shadow_observation, fpc, woc, uf, msc, ds);
+                if (include_shadow) {
+                    summarize_steps(true, shadow_fpc, shadow_woc, shadow_uf,
+                                    shadow_msc, shadow_ds);
                 }
-
-                double mean_window = window_obs > 0
-                    ? (shadow_observation ? (double)(shadow_sum / (float)window_obs)
-                                          : window_sum / (double)window_obs)
-                    : std::numeric_limits<double>::quiet_NaN();
-                bool usable = (observed_full_pop >= CLASSIFY_END) &&
-                    std::isfinite(mean_window);
-
-                fpc[row] = (uint64_t)std::min(observed_full_pop, CLASSIFY_END);
-                woc[row] = (uint64_t)window_obs;
-                uf[row] = usable ? 1u : 0u;
                 dc[row] = (uint64_t)count;
-                msc[row] = (float)mean_window;
                 cd[row] = closest_dist;
             });
         }
@@ -627,6 +652,17 @@ class Index {
         out["mean_cfrs"] = mean_cfrs;
         out["closest_dists"] = closest_dists;
         if (shadow_observation) out["decision_steps"] = decision_steps;
+        if (include_shadow) {
+            py::dict shadow;
+            shadow["full_pop_counts"] = shadow_full_pop_counts;
+            shadow["window_obs_counts"] = shadow_window_obs_counts;
+            shadow["usable_flags"] = shadow_usable_flags;
+            shadow["distance_counts"] = distance_counts;
+            shadow["mean_cfrs"] = shadow_mean_cfrs;
+            shadow["closest_dists"] = closest_dists;
+            shadow["decision_steps"] = shadow_decision_steps;
+            out["shadow"] = shadow;
+        }
         return out;
     }
 
@@ -2061,7 +2097,8 @@ Uses bucket routing with optional shadow128 and one Top1-triggered promotion.
             py::arg("classify_start") = 1,
             py::arg("classify_end") = 16,
             py::arg("shadow_observation") = false,
-            py::arg("shadow_pre_expansion") = true
+            py::arg("shadow_pre_expansion") = true,
+            py::arg("include_shadow") = false
         )
         .def("get_items", &Index<float>::getData, py::arg("ids") = py::none(), py::arg("return_type") = "numpy")
         .def("get_ids_list", &Index<float>::getIdsList)

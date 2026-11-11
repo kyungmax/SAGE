@@ -240,7 +240,13 @@ struct IndexHNSW : Index {
             float* mean_cfrs,
             float* closest_dists,
             const SearchParameters* params = nullptr,
-            uint64_t* decision_steps = nullptr) const;
+            uint64_t* decision_steps = nullptr,
+            bool include_shadow = false,
+            uint64_t* shadow_full_pop_counts = nullptr,
+            uint64_t* shadow_window_obs_counts = nullptr,
+            uint64_t* shadow_usable_flags = nullptr,
+            float* shadow_mean_cfrs = nullptr,
+            uint64_t* shadow_decision_steps = nullptr) const;
 
     void knn_query_beam_width_first_target_hit_step(
             idx_t n,

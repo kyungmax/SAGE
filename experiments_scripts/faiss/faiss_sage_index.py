@@ -655,7 +655,8 @@ class Index:
         classify_end: int = 16,
         shadow_observation: bool = False,
         shadow_pre_expansion: bool = True,
-    ) -> dict[str, np.ndarray]:
+        include_shadow: bool = False,
+    ) -> dict[str, Any]:
         native_method = self._require_native_method(
             "search_layer0_cfr_summary",
             "CFR summary instrumentation",
@@ -671,6 +672,7 @@ class Index:
             classify_end=int(classify_end),
             shadow_observation=bool(shadow_observation),
             shadow_pre_expansion=bool(shadow_pre_expansion),
+            include_shadow=bool(include_shadow),
         )
 
     def search_layer0_path_with_dist_metrics_hide_node_batch(

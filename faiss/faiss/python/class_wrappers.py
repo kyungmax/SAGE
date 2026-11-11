@@ -1336,8 +1336,14 @@ def handle_Index(the_class):
             classify_start=1,
             classify_end=16,
             shadow_observation=False,
-            shadow_pre_expansion=True):
-        """Return native Faiss per-query CFR window summaries for SAGE calibration."""
+            shadow_pre_expansion=True,
+            include_shadow=False):
+        """Return CFR summaries, optionally collecting both windows in one search."""
+
+        if include_shadow and shadow_observation:
+            raise ValueError("include_shadow cannot be combined with shadow_observation")
+        if include_shadow and int(ef) < 128:
+            raise ValueError("Shadow CFR summary requires ef >= 128")
 
         selector = _selector_from_faiss_filter(filter)
         x = np.asarray(x)
@@ -1370,6 +1376,12 @@ def handle_Index(the_class):
         mean_cfrs = np.full(n, np.nan, dtype=np.float32)
         closest_dists = np.full(n, np.inf, dtype=np.float32)
         decision_steps = np.zeros(n, dtype=np.uint64)
+        if include_shadow:
+            shadow_full_pop_counts = np.zeros(n, dtype=np.uint64)
+            shadow_window_obs_counts = np.zeros(n, dtype=np.uint64)
+            shadow_usable_flags = np.zeros(n, dtype=np.uint64)
+            shadow_mean_cfrs = np.full(n, np.nan, dtype=np.float32)
+            shadow_decision_steps = np.zeros(n, dtype=np.uint64)
 
         params = faiss.SearchParametersHNSWAdaptiveLight()
         params.efSearch = int(ef)
@@ -1398,7 +1410,13 @@ def handle_Index(the_class):
                 swig_ptr(mean_cfrs),
                 swig_ptr(closest_dists),
                 params,
-                swig_ptr(decision_steps))
+                swig_ptr(decision_steps),
+                bool(include_shadow),
+                swig_ptr(shadow_full_pop_counts) if include_shadow else None,
+                swig_ptr(shadow_window_obs_counts) if include_shadow else None,
+                swig_ptr(shadow_usable_flags) if include_shadow else None,
+                swig_ptr(shadow_mean_cfrs) if include_shadow else None,
+                swig_ptr(shadow_decision_steps) if include_shadow else None)
         finally:
             if prev_num_threads is not None:
                 faiss.omp_set_num_threads(int(prev_num_threads))
@@ -1413,6 +1431,16 @@ def handle_Index(the_class):
         }
         if shadow_observation:
             result["decision_steps"] = decision_steps
+        if include_shadow:
+            result["shadow"] = {
+                "full_pop_counts": shadow_full_pop_counts,
+                "window_obs_counts": shadow_window_obs_counts,
+                "usable_flags": shadow_usable_flags,
+                "distance_counts": distance_counts,
+                "mean_cfrs": shadow_mean_cfrs,
+                "closest_dists": closest_dists,
+                "decision_steps": shadow_decision_steps,
+            }
         return result
 
     def replacement_knn_query_beam_width_first_target_hit_step(

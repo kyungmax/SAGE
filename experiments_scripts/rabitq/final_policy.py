@@ -62,16 +62,24 @@ class RaBitQAdapter:
 
     def search_layer0_cfr_summary(self, vectors, *, k, ef, hide_labels, num_threads,
                                   classify_start, classify_end, shadow_observation=False,
-                                  shadow_pre_expansion=True):
+                                  shadow_pre_expansion=True, include_shadow=False):
+        if include_shadow and shadow_observation:
+            raise ValueError("include_shadow requires the main summary mode")
+        if include_shadow and ef < 128:
+            raise ValueError("Shadow observation requires ef >= 128")
         _, _, stats = self.native.search_adaptive_light_with_stats(
             vectors, k=k, ef_init=ef, enable_stop=False, hide_labels=hide_labels,
             num_threads=_threads(num_threads), classify_start=classify_start,
-            classify_end=classify_end, shadow_observation=shadow_observation,
+            classify_end=classify_end, shadow_observation=shadow_observation or include_shadow,
             shadow_pre_expansion=shadow_pre_expansion)
         signal = stats["shadow_cfr" if shadow_observation else "classify_cfr_mean"]
         result = dict(mean_cfrs=signal, usable_flags=np.isfinite(signal))
         if shadow_observation:
             result["decision_steps"] = stats["shadow_decision_step"]
+        if include_shadow:
+            result["shadow"] = dict(mean_cfrs=stats["shadow_cfr"],
+                                    usable_flags=np.isfinite(stats["shadow_cfr"]),
+                                    decision_steps=stats["shadow_decision_step"])
         return result
 
     def calc_lids_internal_sampled(self, *, k_lid, sample_fraction, min_sample_size,

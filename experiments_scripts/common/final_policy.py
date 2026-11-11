@@ -60,12 +60,13 @@ def _recommend_ef(measure_hits, *, total_hits, min_ef=64, k=10):
 
 
 def _fit_buckets(index, vectors, ids, *, rank, routes, margin, k, threads, get_hits,
-                 shadow_observation=False, observation_ef=None):
+                 shadow_observation=False, observation_ef=None, summary=None):
     observation_ef = rank if observation_ef is None else observation_ef
-    observer_args = {"shadow_observation": True, "shadow_pre_expansion": True} if shadow_observation else {}
-    summary = index.search_layer0_cfr_summary(
-        vectors, k=k, ef=observation_ef, hide_labels=ids, num_threads=threads,
-        classify_start=1, classify_end=16, **observer_args)
+    if summary is None:
+        observer_args = {"shadow_observation": True, "shadow_pre_expansion": True} if shadow_observation else {}
+        summary = index.search_layer0_cfr_summary(
+            vectors, k=k, ef=observation_ef, hide_labels=ids, num_threads=threads,
+            classify_start=1, classify_end=16, **observer_args)
     signal = np.asarray(summary["mean_cfrs"], dtype=np.float32)
     mask = np.asarray(summary["usable_flags"], dtype=bool) & np.isfinite(signal)
     if not mask.any():
@@ -82,6 +83,30 @@ def _fit_buckets(index, vectors, ids, *, rank, routes, margin, k, threads, get_h
                 acceptable_rates=rates, usable_count=int(mask.sum()),
                 raw_thetas=raw, thetas=thetas.tolist(), tau=float(thetas[-1]),
                 gammas=(thetas / thetas[-1]).tolist())
+
+
+def _fit_policy_buckets(index, vectors, ids, *, initial_ef, shadow_enabled,
+                        k, threads, get_hits):
+    """Fit independent main/shadow thresholds from one uncut wide traversal."""
+    use_shadow = shadow_enabled and initial_ef >= 256
+    summary = index.search_layer0_cfr_summary(
+        vectors, k=k, ef=initial_ef, hide_labels=ids, num_threads=threads,
+        classify_start=1, classify_end=16, include_shadow=use_shadow,
+        shadow_pre_expansion=True)
+    config = _build_mixed_threshold_config(initial_ef, mixed_bucket_count=4)
+    main = _fit_buckets(index, vectors, ids, rank=initial_ef,
+                        routes=list(config.resolved_route_efs), margin=2,
+                        k=k, threads=threads, get_hits=get_hits, summary=summary)
+    shadow = None
+    if use_shadow:
+        # Each observer keeps its own window and usable-probe mask. An ef128
+        # traversal or the main CFR distribution cannot substitute for shadow.
+        shadow = _fit_buckets(index, vectors, ids, rank=128,
+                              routes=[32, 64, 96], margin=4,
+                              k=k, threads=threads, get_hits=get_hits,
+                              shadow_observation=True, observation_ef=initial_ef,
+                              summary=summary["shadow"])
+    return main, shadow
 
 
 def calibrate_policy(index, *, probe_ids=None, lid_pool=None, k=10, num_threads=1,
@@ -166,24 +191,11 @@ def calibrate_policy(index, *, probe_ids=None, lid_pool=None, k=10, num_threads=
         ef, history = _recommend_ef(lambda e: get_hits(e).sum(), total_hits=len(ids) * k,
                                     min_ef=min_ef, k=k)
         sweep_end = time.perf_counter()
-        shadow_cache = {}
-
         def fit(initial_ef):
-            config = _build_mixed_threshold_config(initial_ef, mixed_bucket_count=4)
-            main = _fit_buckets(index, vectors, ids, rank=initial_ef,
-                                routes=list(config.resolved_route_efs), margin=2,
-                                k=k, threads=num_threads, get_hits=get_hits)
-            shadow = None
-            if shadow_enabled and initial_ef >= 256:
-                # Observe rank128 before expansion on the same wide traversal
-                # used at deployment. An ef128 main trace is not equivalent.
-                observation_ef = initial_ef
-                if observation_ef not in shadow_cache:
-                    shadow_cache[observation_ef] = _fit_buckets(
-                        index, vectors, ids, rank=128, routes=[32, 64, 96], margin=4,
-                        k=k, threads=num_threads, get_hits=get_hits,
-                        shadow_observation=True, observation_ef=observation_ef)
-                shadow = shadow_cache[observation_ef]
+            main, shadow = _fit_policy_buckets(
+                index, vectors, ids, initial_ef=initial_ef,
+                shadow_enabled=shadow_enabled, k=k, threads=num_threads,
+                get_hits=get_hits)
             return dict(version=POLICY_VERSION, backend=backend, k=k, ef_init=initial_ef,
                         calibration_sampling=dict(sampling),
                         cfr_signal="raw_cfr_window_mean", classify_start=1, classify_end=16,

@@ -11,9 +11,8 @@ import time
 
 import numpy as np
 
-from .final_policy import POLICY_VERSION, _fit_buckets, _grid_for_cap
+from .final_policy import POLICY_VERSION, _fit_policy_buckets, _grid_for_cap
 from .offline_calibration import DEFAULT_CALIBRATION_PROBE_COUNT
-from .projected_local_acceptable_runtime import _build_mixed_threshold_config
 
 
 def curve_grid(*, recommended_ef, offline_cap, k=10, minimum=64, initial_cap=2048):
@@ -72,15 +71,10 @@ def fit_curve_policies(index, policy, ef_values, *, num_threads=1):
             return fixed[ef]
 
         for ef in missing:
-            config = _build_mixed_threshold_config(ef, mixed_bucket_count=4)
-            main = _fit_buckets(index, vectors, ids, rank=ef,
-                               routes=list(config.resolved_route_efs), margin=2,
-                               k=k, threads=num_threads, get_hits=get_hits)
-            shadow = None
-            if policy['shadow_enabled'] and ef >= 256:
-                shadow = _fit_buckets(index, vectors, ids, rank=128, routes=[32, 64, 96],
-                                     margin=4, k=k, threads=num_threads, get_hits=get_hits,
-                                     shadow_observation=True, observation_ef=ef)
+            main, shadow = _fit_policy_buckets(
+                index, vectors, ids, initial_ef=ef,
+                shadow_enabled=policy['shadow_enabled'], k=k,
+                threads=num_threads, get_hits=get_hits)
             curves[str(ef)] = dict(version=POLICY_VERSION, backend=policy['backend'],
                 k=k, ef_init=ef, calibration_sampling=deepcopy(policy['calibration_sampling']),
                 cfr_signal='raw_cfr_window_mean', classify_start=1, classify_end=16,

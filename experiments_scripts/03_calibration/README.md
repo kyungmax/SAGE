@@ -5,6 +5,15 @@ calibration-stability table, and pseudo-ground-truth table, all at **k=10**.
 It runs independently of `01_main_results`: no saved main result or policy is
 required. Each run calibrates the supplied FAISS graph afresh.
 
+When shadow is enabled, threshold fitting collects main and shadow CFR from
+one uncut traversal at the selected ef. Main uses valid CFR values within its
+first 16 pops after its result heap is full; shadow uses its first 16 valid
+observations after 128 candidates are available. Their usable-probe masks and
+threshold fits remain independent, with safety margins 2 and 4 respectively. Probe labels,
+pseudo ground truth and per-ef hit counts are shared. The same combined
+observation is used for additional curve points and, with the requested window
+length, parameter-sensitivity calibration.
+
 Run from the repository root. Build with `bash scripts/build.sh faiss`, then
 prepare the HDF5 data and matching indexes described in
 [01_main_results](../01_main_results/README.md). The default input catalog is
