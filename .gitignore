@@ -12,7 +12,6 @@ build-*/
 sage.local.env
 runtime-local.json
 datasets/*
-!datasets/README.md
 index/*
 !index/README.md
 runs/

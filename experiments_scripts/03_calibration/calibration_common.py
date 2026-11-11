@@ -53,7 +53,7 @@ def load_inputs(args):
     cfg = common.resolve_datasets(args.catalog, {'datasets': [args.dataset]})[0]
     for path in (cfg['dataset_path'], cfg['faiss_index']['path']):
         if not Path(path).is_file():
-            raise FileNotFoundError(f'Missing input: {path}; see 01_main_results/README.md for data and index preparation')
+            raise FileNotFoundError(f'Missing input: {path}; see the root README.md for data and index preparation')
     faiss.omp_set_num_threads(args.threads)
     index = Index(space=cfg['space'], dim=cfg['dimension'])
     index.load_index(cfg['faiss_index']['path'])

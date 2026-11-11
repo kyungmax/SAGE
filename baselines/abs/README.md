@@ -14,7 +14,7 @@ bash scripts/python.sh baselines/abs/tests/test_unit_or_zero.py -q
 ```
 
 For batch measurement and gamma tuning, use the entry points documented in
-[experiments_scripts/01_main_results](../../experiments_scripts/01_main_results/README.md).
+[root execution guide](../../README.md#run).
 
 Use L2 directly. Inner-product search requires unit-normalized database and
 query vectors and `unit_normalized=True`. `scripts/unit_or_zero_runtime.py`
