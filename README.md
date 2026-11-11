@@ -99,10 +99,23 @@ absolute paths. Index builders do not update this catalog.
 
 ## Run
 
+### Common settings
+
 Edit [experiment.json](experiments_scripts/01_main_results/config/main6_online24/experiment.json)
 for your host: set `timing.cpus`, `timing.numa_node`, `offline_threads`, and
 `online_threads`, with thread counts equal to the CPU count. The supplied
 configuration uses 24 physical cores (`1,3,...,47`) on NUMA node 1.
+
+- **Main runner:** pass `--config /path/experiment.json --datasets-config /path/datasets.json`
+  when using copies, and a fresh `--output /path/new-run` for another run.
+- **Ada-EF / DARTH:** build their optional runtimes first. Pass the same catalog
+  with `--catalog` and set `--threads`; these runners do not read `experiment.json`.
+  Wrap their commands with `numactl --physcpubind=CPU_LIST --membind=NODE` matching
+  the main configuration. The examples below use 24 threads.
+- **Timing:** one warmup and five measured calls. Keep timing jobs sequential
+  on the same cores.
+
+### Full main run
 
 ```bash
 bash experiments_scripts/01_main_results/run.sh --dry-run
@@ -110,24 +123,86 @@ bash experiments_scripts/01_main_results/run.sh --preflight
 bash experiments_scripts/01_main_results/run.sh
 ```
 
-Pass `--config /path/experiment.json --datasets-config /path/datasets.json`
-to each command when using copies. `--dry-run` prints the plan; `--preflight`
-checks prepared inputs. Use a fresh `--output /path/new-run` for another run.
+`--dry-run` prints the plan; `--preflight` checks prepared inputs. The full run
+executes FAISS, hnswlib, PiP, and ABS sequentially at k=10. Ada-EF and DARTH use
+the separate commands below.
 
-The main runner executes FAISS, hnswlib, PiP, and ABS sequentially at k=10,
-with one warmup and five measured calls. Results are written to
+Results are written to
 `runs/01_main_results/k10/{faiss,hnswlib,pip,abs}/summary.csv`; policies and raw
-measurements are kept alongside them. Run only one cell with:
+measurements are kept alongside them. To run methods individually:
+
+### FAISS and hnswlib
+
+Calibrate SAGE and measure the SAGE/vanilla recall-latency curves on each backend.
+Run FAISS first: its `runs/01_main_results/k10/faiss/targets.json` supplies the
+SAGE recall target at the recommended ef for all four baselines below.
 
 ```bash
 bash experiments_scripts/01_main_results/run.sh run-cell --cell faiss
+bash experiments_scripts/01_main_results/run.sh run-cell --cell hnswlib
 ```
 
-Other cell names are `hnswlib`, `pip`, and `abs`. Run FAISS first because
-PiP/ABS consume its target file. Keep timing jobs sequential on the same cores.
+### PiP
 
-For Recall@100, prepare YouTube's top100 ground truth, then run FAISS using the
-new catalog (pass your input catalog to preparation with `--catalog`):
+- **Input:** the same FAISS graph and the completed FAISS target from this run.
+- **Tuning:** fix the overlap threshold at `0.95`; tune `efSearch` and patience
+  against the target using evaluation ground truth. Select the fastest passing
+  configuration, then measure it in a separate process.
+
+```bash
+bash experiments_scripts/01_main_results/run.sh run-cell --cell pip
+```
+
+### ABS
+
+- **Input:** the same FAISS graph and the completed FAISS target from this run.
+- **Tuning:** tune the distance-slack parameter `gamma` using evaluation ground
+  truth. Select the smallest tested value meeting the target, then measure it
+  in a separate process. ABS does not use `efSearch`.
+
+```bash
+bash experiments_scripts/01_main_results/run.sh run-cell --cell abs
+```
+
+### Ada-EF
+
+- **Input:** the catalog's existing hnswlib graph and the FAISS target manifest.
+- **Stages:** offline calibration of the score-to-ef table, followed by online
+  measurement. Run for the five cosine datasets; SpaceV/L2 is unsupported.
+
+```bash
+bash scripts/python.sh experiments_scripts/01_main_results/run_adaef.py \
+  --dataset glove-100-angular --targets runs/01_main_results/k10/faiss/targets.json \
+  --threads 24 --output-root runs/adaef
+```
+
+Repeat per dataset. Add `--preflight` to check inputs, or use `--phase offline`
+and `--phase online` to split the stages. Results:
+`runs/adaef/DATASET/k10/target_hits_N/summary.csv`.
+
+### DARTH
+
+- **Preparation:** select 10,000 learning and 1,000 validation queries, build an
+  auxiliary graph excluding those holdouts, compute exact ground truth, and
+  train the LightGBM model and derive prediction intervals.
+- **Evaluation:** validate the frozen model, then measure the official test
+  queries on the original full FAISS graph using the manifest's recommended ef
+  and target recall. This pipeline supports k=10 on all six datasets.
+
+```bash
+bash scripts/python.sh experiments_scripts/01_main_results/run_darth_pipeline.py \
+  --dataset glove-100-angular --targets runs/01_main_results/k10/faiss/targets.json \
+  --threads 24 --output runs/darth/glove
+```
+
+Repeat per dataset with a new output directory. Add `--preflight` to check inputs;
+`--stop-after prepare` and `--resume` split preparation from the remaining stages.
+Results: `runs/darth/glove/summary.csv`.
+
+### Recall@100
+
+Prepare YouTube's top100 ground truth, then run FAISS using the new catalog
+(pass your input catalog to preparation with `--catalog`):
 
 ```bash
 bash scripts/python.sh experiments_scripts/01_main_results/prepare_ground_truth.py \
@@ -136,21 +211,7 @@ bash experiments_scripts/01_main_results/run.sh run-cell --cell faiss --k 100 \
   --datasets-config runs/inputs/youtube_top100/datasets.json
 ```
 
-Ada-EF and DARTH run separately after the FAISS main cell completes. Use matching
-`numactl` placement and `--threads N`; supply your catalog with `--catalog`.
-These runners do not read the main `experiment.json`:
-
-```bash
-bash scripts/python.sh experiments_scripts/01_main_results/run_adaef.py \
-  --dataset glove-100-angular --targets runs/01_main_results/k10/faiss/targets.json \
-  --output-root runs/adaef
-bash scripts/python.sh experiments_scripts/01_main_results/run_darth_pipeline.py \
-  --dataset glove-100-angular --targets runs/01_main_results/k10/faiss/targets.json \
-  --output runs/darth/glove
-```
-
-Repeat per dataset; Ada-EF supports the five cosine datasets only. Both commands
-accept `--preflight` to check inputs before execution.
+### Other experiments
 
 For the other [experiments](#experiments), run `bash scripts/python.sh PATH --help`
 for required inputs and output options. Detailed analysis consumes a completed
