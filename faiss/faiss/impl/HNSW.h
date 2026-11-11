@@ -59,8 +59,8 @@ struct SearchParametersHNSW : SearchParameters {
 };
 
 struct SearchParametersHNSWAdaptiveLight : SearchParametersHNSW {
-    bool enable_stop = true;
     int efMax = 1024;
+    // NaN disables main classification; shadow is configured independently.
     float early_stop_ratio = 0.6f;
     float super_easy_gamma_ratio = std::numeric_limits<float>::quiet_NaN();
     float mid_easy_upper_gamma_ratio = std::numeric_limits<float>::quiet_NaN();

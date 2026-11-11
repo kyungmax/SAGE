@@ -1537,7 +1537,7 @@ int search_from_candidates_adaptive_light(
             observe_shadow_cfr(
                     candidate_dist, static_cast<size_t>(nstep));
         }
-        if (params.enable_stop && shadow_classifier_enabled &&
+        if (shadow_classifier_enabled &&
             !shadow_bucket_classifier_enabled &&
             shadow_is_easy_query && shadow_decision_step > 0 &&
             shadow_decision_step <= shadow_stop_budget &&

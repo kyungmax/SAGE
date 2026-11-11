@@ -85,7 +85,7 @@ def query(index, vectors, policy, threads):
     main, shadow, knobs = policy['main'], policy['shadow'], policy['knobs']
     kwargs = dict(k=10, ef_init=policy['ef_init'], num_threads=threads, filter=None,
         early_stop_ratio=main['tau'], paper_bucket_count=knobs['B'],
-        bucket_gamma_ratios=main['gammas'], enable_stop=True,
+        bucket_gamma_ratios=main['gammas'],
         classify_start=1, classify_end=knobs['W'], return_diagnostics=False,
         shadow_stop_enabled=False, shadow_pre_expansion=True)
     if shadow is not None:

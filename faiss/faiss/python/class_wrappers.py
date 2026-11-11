@@ -522,7 +522,6 @@ def handle_Index(the_class):
             x,
             k=1,
             ef_init=128,
-            enable_stop=True,
             num_threads=-1,
             filter=None,
             early_stop_ratio=0.6,
@@ -555,7 +554,6 @@ def handle_Index(the_class):
         params = faiss.SearchParametersHNSWAdaptiveLight()
         params.efSearch = int(ef_init)
         params.efMax = max(int(ef_init), 1024)
-        params.enable_stop = bool(enable_stop)
         params.early_stop_ratio = float(early_stop_ratio)
         params.super_easy_gamma_ratio = float(super_easy_gamma_ratio)
         params.mid_easy_upper_gamma_ratio = float(mid_easy_upper_gamma_ratio)
@@ -593,7 +591,6 @@ def handle_Index(the_class):
             entry_points,
             k=1,
             ef_init=128,
-            enable_stop=True,
             num_threads=-1,
             filter=None,
             early_stop_ratio=0.6,
@@ -627,7 +624,6 @@ def handle_Index(the_class):
         params = faiss.SearchParametersHNSWAdaptiveLight()
         params.efSearch = int(ef_init)
         params.efMax = max(int(ef_init), 1024)
-        params.enable_stop = bool(enable_stop)
         params.early_stop_ratio = float(early_stop_ratio)
         params.super_easy_gamma_ratio = float(super_easy_gamma_ratio)
         params.mid_easy_upper_gamma_ratio = float(mid_easy_upper_gamma_ratio)
@@ -671,7 +667,6 @@ def handle_Index(the_class):
             cache,
             k=1,
             ef_init=128,
-            enable_stop=True,
             num_threads=-1,
             filter=None,
             early_stop_ratio=0.6,
@@ -707,7 +702,6 @@ def handle_Index(the_class):
         params = faiss.SearchParametersHNSWAdaptiveLight()
         params.efSearch = int(ef_init)
         params.efMax = max(int(ef_init), 1024)
-        params.enable_stop = bool(enable_stop)
         params.early_stop_ratio = float(early_stop_ratio)
         params.super_easy_gamma_ratio = float(super_easy_gamma_ratio)
         params.mid_easy_upper_gamma_ratio = float(mid_easy_upper_gamma_ratio)
@@ -753,7 +747,6 @@ def handle_Index(the_class):
             x,
             k=1,
             ef_init=128,
-            enable_stop=True,
             num_threads=-1,
             filter=None,
             early_stop_ratio=0.6,
@@ -786,7 +779,6 @@ def handle_Index(the_class):
         params = faiss.SearchParametersHNSWAdaptiveLight()
         params.efSearch = int(ef_init)
         params.efMax = max(int(ef_init), 1024)
-        params.enable_stop = bool(enable_stop)
         params.early_stop_ratio = float(early_stop_ratio)
         params.classify_start = int(classify_start)
         params.classify_end = int(classify_end)
@@ -825,7 +817,6 @@ def handle_Index(the_class):
             entry_points,
             k=1,
             ef_init=128,
-            enable_stop=True,
             num_threads=-1,
             filter=None,
             early_stop_ratio=0.6,
@@ -859,7 +850,6 @@ def handle_Index(the_class):
         params = faiss.SearchParametersHNSWAdaptiveLight()
         params.efSearch = int(ef_init)
         params.efMax = max(int(ef_init), 1024)
-        params.enable_stop = bool(enable_stop)
         params.early_stop_ratio = float(early_stop_ratio)
         params.classify_start = int(classify_start)
         params.classify_end = int(classify_end)
@@ -904,7 +894,6 @@ def handle_Index(the_class):
             cache,
             k=1,
             ef_init=128,
-            enable_stop=True,
             num_threads=-1,
             filter=None,
             early_stop_ratio=0.6,
@@ -940,7 +929,6 @@ def handle_Index(the_class):
         params = faiss.SearchParametersHNSWAdaptiveLight()
         params.efSearch = int(ef_init)
         params.efMax = max(int(ef_init), 1024)
-        params.enable_stop = bool(enable_stop)
         params.early_stop_ratio = float(early_stop_ratio)
         params.classify_start = int(classify_start)
         params.classify_end = int(classify_end)
@@ -988,7 +976,6 @@ def handle_Index(the_class):
             k=1,
             ef_init=128,
             ef_max=None,
-            enable_stop=True,
             num_threads=-1,
             filter=None,
             early_stop_ratio=0.6,
@@ -1027,7 +1014,6 @@ def handle_Index(the_class):
             params.efMax = max(int(ef_init), 1024)
         else:
             params.efMax = max(int(ef_init), int(ef_max))
-        params.enable_stop = bool(enable_stop)
         params.early_stop_ratio = float(early_stop_ratio)
         params.classify_start = int(classify_start)
         params.classify_end = int(classify_end)

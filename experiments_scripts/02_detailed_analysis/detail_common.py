@@ -168,7 +168,9 @@ def vanilla(index, queries, k, ef, threads):
 
 def vanilla_work(index, queries, k, ef, threads, upper):
     expected = vanilla(index, queries, k, ef, threads)
-    diagnostic = index.knn_query_sage(queries, k=k, ef_init=ef, enable_stop=False,
+    # Replay vanilla work with both classifiers disabled.
+    diagnostic = index.knn_query_sage(queries, k=k, ef_init=ef,
+        early_stop_ratio=float('nan'), shadow_stop_enabled=False,
         num_threads=threads, return_diagnostics=True, bucket_gamma_ratios=[1., 1., 1.])
     for key in ('labels', 'distances'):
         np.testing.assert_array_equal(diagnostic[key], expected[key], err_msg='Vanilla counter replay changed outputs')

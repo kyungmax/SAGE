@@ -121,7 +121,6 @@ class Index:
         *,
         k: int,
         ef_init: int,
-        enable_stop: bool,
         num_threads: int,
         filter,
         early_stop_ratio: float,
@@ -135,7 +134,6 @@ class Index:
         kwargs: dict[str, Any] = {
             "k": int(k),
             "ef_init": int(ef_init),
-            "enable_stop": bool(enable_stop),
             "num_threads": self._effective_threads(num_threads),
             "filter": filter,
             "early_stop_ratio": float(early_stop_ratio),
@@ -282,7 +280,6 @@ class Index:
         data,
         k: int = 1,
         ef_init: int = 128,
-        enable_stop: bool = True,
         num_threads: int = -1,
         filter=None,
         early_stop_ratio: float = 0.6,
@@ -301,7 +298,6 @@ class Index:
             **self._adaptive_light_kwargs(
                 k=k,
                 ef_init=ef_init,
-                enable_stop=enable_stop,
                 num_threads=num_threads,
                 filter=filter,
                 early_stop_ratio=early_stop_ratio,
@@ -318,7 +314,6 @@ class Index:
         k: int = 1,
         ef_init: int = 128,
         ef_max: int | None = None,
-        enable_stop: bool = True,
         num_threads: int = -1,
         filter=None,
         early_stop_ratio: float = 0.6,
@@ -334,7 +329,6 @@ class Index:
         kwargs = self._adaptive_light_kwargs(
             k=k,
             ef_init=ef_init,
-            enable_stop=enable_stop,
             num_threads=num_threads,
             filter=filter,
             early_stop_ratio=early_stop_ratio,
@@ -348,6 +342,8 @@ class Index:
         return native_method(vectors, **kwargs)
 
     def knn_query_sage(self, data, *, return_diagnostics=False, return_routing=False, **kwargs):
+        if 'enable_stop' in kwargs:
+            raise TypeError("knn_query_sage() got an unexpected keyword argument 'enable_stop'")
         if return_routing and not return_diagnostics:
             raise ValueError('return_routing requires return_diagnostics=True.')
         vectors = self._prepare_vectors(data)
@@ -359,7 +355,6 @@ class Index:
         p = faiss.SearchParametersHNSWAdaptiveLight()
         p.efSearch = int(kwargs.get('ef_init', 128))
         p.efMax = max(1024, p.efSearch)
-        p.enable_stop = kwargs.get('enable_stop', True)
         p.bounded_queue, p.paper_bucket_mode = True, True
         p.paper_bucket_count = 4
         p.early_stop_ratio = kwargs.get('early_stop_ratio', .6)

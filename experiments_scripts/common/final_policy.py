@@ -246,7 +246,7 @@ def query(index, vectors, policy, *, num_threads=-1, filter=None, return_diagnos
         raise ValueError("Routing diagnostics require FAISS and return_diagnostics=True")
     kwargs = dict(k=policy["k"], ef_init=policy["ef_init"], num_threads=num_threads,
                   filter=filter, early_stop_ratio=main["tau"], paper_bucket_count=4,
-                  bucket_gamma_ratios=main["gammas"], enable_stop=True,
+                  bucket_gamma_ratios=main["gammas"],
                   classify_start=1, classify_end=16, return_diagnostics=return_diagnostics,
                   shadow_stop_enabled=False,
                   shadow_pre_expansion=True)
