@@ -10,12 +10,10 @@ policy; a completed main-results run is not required.
 
 ## 2. Run one dataset
 
-Set the CPU list, NUMA node, and `--threads` to the same placement used for the
-main experiments. The example uses 24 physical cores on NUMA node 1:
+Set `--threads` to match the main experiments. The example uses 24 threads:
 
 ```bash
-numactl --physcpubind=1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47 --membind=1 \
-  bash scripts/python.sh experiments_scripts/03_calibration/run.py \
+bash scripts/python.sh experiments_scripts/03_calibration/run.py \
   --dataset glove-100-angular --experiment all --threads 24 \
   --catalog experiments_scripts/01_main_results/config/main6_online24/datasets.json \
   --output-root runs/03_calibration

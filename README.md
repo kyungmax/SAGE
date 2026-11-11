@@ -23,7 +23,7 @@ paper runners. On Ubuntu:
 ```bash
 sudo apt-get update
 sudo apt-get install -y build-essential cmake swig pkg-config \
-  python3-dev python3-venv libopenblas-dev libomp-dev numactl \
+  python3-dev python3-venv libopenblas-dev libomp-dev \
   libhdf5-dev libeigen3-dev libboost-all-dev
 
 python3 -m venv .venv
@@ -103,19 +103,19 @@ absolute paths. Index builders do not update this catalog.
 
 ### Common settings
 
-Edit [experiment.json](experiments_scripts/01_main_results/config/main6_online24/experiment.json)
-for your host: set `timing.cpus`, `timing.numa_node`, `offline_threads`, and
-`online_threads`, with thread counts equal to the CPU count. The supplied
-configuration uses 24 physical cores (`1,3,...,47`) on NUMA node 1.
+Set `offline_threads` and `online_threads` in
+[experiment.json](experiments_scripts/01_main_results/config/main6_online24/experiment.json)
+for your host (default: 24 each). CPU and NUMA binding are disabled by default:
+`timing.cpus` and `timing.numa_node` are `null`. Explicit binding remains optional;
+setting a NUMA node requires `numactl`.
 
 - **Main runner:** pass `--config /path/experiment.json --datasets-config /path/datasets.json`
   when using copies, and a fresh `--output /path/new-run` for another run.
 - **Ada-EF / DARTH:** build their optional runtimes first. Pass the same catalog
   with `--catalog` and set `--threads`; these runners do not read `experiment.json`.
-  Wrap their commands with `numactl --physcpubind=CPU_LIST --membind=NODE` matching
-  the main configuration. The examples below use 24 threads.
+  The examples below use 24 threads.
 - **Timing:** one warmup and five measured calls. Keep timing jobs sequential
-  on the same cores.
+  on the same machine.
 
 ### Full main run
 

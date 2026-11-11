@@ -143,7 +143,7 @@ def make_plan(args):
             warmups=1, measured_runs=5, trace_timeout_seconds=args.trace_timeout_seconds,
             intervals='Derived from learning trace only; frozen before validation and test'),
         affinity=dict(cpus=sorted(os.sched_getaffinity(0)),
-                      memory_policy='Inherited; use the main experiment NUMA placement'))
+                      memory_policy='Inherited from parent process'))
 
 
 def worker(manifest, stage):

@@ -5,9 +5,11 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import struct
 
-from main6_common import ROOT, RUN_ROOT, SAGE_ROOT, effective_config, resolve_datasets, validate_policy_config
+from main6_common import (ROOT, RUN_ROOT, SAGE_ROOT, effective_config, resolve_datasets,
+                         validate_policy_config, validate_timing_config)
 
 CONFIG = ROOT / 'config/main6_online24'
 
@@ -75,11 +77,15 @@ def main():
     ks = config['k_values'] if args.k == 'all' else [int(args.k)]
     backends = sorted({'hnswlib' if c == 'hnswlib' else 'faiss' for c in cells})
     errors, checked, binaries = [], [], []
-    available = os.sched_getaffinity(0)
-    if not set(config['timing']['cpus']) <= available:
-        errors.append(dict(error='Configured CPU affinity is unavailable on this host'))
-    if len(config['timing']['cpus']) != config['online_threads'] or config['offline_threads'] != config['online_threads']:
-        errors.append(dict(error='Offline/online thread count must match assigned CPUs'))
+    try:
+        validate_timing_config(config)
+        cpus = config['timing'].get('cpus')
+        if cpus and not set(cpus) <= os.sched_getaffinity(0):
+            raise ValueError('Configured CPU affinity is unavailable on this host')
+        if config['timing'].get('numa_node') is not None and not shutil.which('numactl'):
+            raise ValueError('Explicit NUMA binding requires numactl')
+    except ValueError as exc:
+        errors.append(dict(error=str(exc)))
     if config['timed_repeats'] < 2 or config['warmups_per_setting'] < 0:
         errors.append(dict(error='Need at least two measured runs and nonnegative warmups'))
     for k in ks:

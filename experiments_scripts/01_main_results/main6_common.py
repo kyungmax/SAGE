@@ -29,6 +29,38 @@ def effective_config(path, k=None):
     return config
 
 
+def validate_timing_config(config):
+    """Thread counts are independent of placement unless CPUs are explicitly bound."""
+    offline, online = config['offline_threads'], config['online_threads']
+    if any(type(value) is not int or value < 1 for value in (offline, online)):
+        raise ValueError('Offline/online thread counts must be positive integers')
+    if offline != online:
+        raise ValueError('Use the same offline and online thread counts')
+    cpus = config['timing'].get('cpus')
+    if cpus is not None:
+        if (not isinstance(cpus, list) or
+                any(type(cpu) is not int or cpu < 0 for cpu in cpus) or
+                len(cpus) != len(set(cpus))):
+            raise ValueError('CPU binding must be null or a list of distinct nonnegative CPU IDs')
+        if cpus and len(cpus) != online:
+            raise ValueError('Explicit CPU binding must match offline/online thread counts')
+    node = config['timing'].get('numa_node')
+    if node is not None and (type(node) is not int or node < 0):
+        raise ValueError('NUMA binding must be null or a nonnegative node ID')
+
+
+def with_numa_binding(command, config):
+    """Add numactl only when a NUMA node was explicitly requested."""
+    node = config['timing'].get('numa_node')
+    if node is None:
+        return command
+    prefix = ['numactl']
+    cpus = config['timing'].get('cpus')
+    if cpus:
+        prefix.append('--physcpubind=' + ','.join(map(str, cpus)))
+    return [*prefix, f'--membind={node}', *command]
+
+
 def validate_policy_config(config):
     # These are fixed policy choices in common.final_policy, not free knobs.
     if config['calibration'].get('lid_pool_size', 10000) != 10000:

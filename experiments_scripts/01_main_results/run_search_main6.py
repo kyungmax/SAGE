@@ -11,7 +11,8 @@ import sys
 import time
 
 from main6_common import (ROOT, RUN_ROOT, SAGE_ROOT, effective_config, resolve_datasets,
-                         hits_per_query, validate_policy_config)
+                         hits_per_query, validate_policy_config, validate_timing_config,
+                         with_numa_binding)
 from run_baselines_main6 import (read, save, sha, array_sha, identity, csvwrite, require,
                                  environment, SAGE_BINARY)
 from tune_baselines import ef_grid
@@ -36,8 +37,9 @@ def dataset_run(args, config, ds):
     import h5py
     import numpy as np
     sys.path.insert(0, str(SAGE_ROOT))
-    cpus, threads, k = config['timing']['cpus'], config['online_threads'], config['k']
-    os.sched_setaffinity(0, cpus)
+    cpus, threads, k = config['timing'].get('cpus'), config['online_threads'], config['k']
+    if cpus:
+        os.sched_setaffinity(0, cpus)
     if args.backend == 'faiss':
         sys.path.insert(0, str(SAGE_BINARY.parents[1]))
         import faiss
@@ -51,7 +53,8 @@ def dataset_run(args, config, ds):
         require(Path(hnswlib.__file__).resolve().parent == SAGE_ROOT / 'hnswlib', 'Wrong hnswlib package')
         Index = hnswlib.Index
     from experiments_scripts.common.final_policy import calibrate_policy, query
-    os.sched_setaffinity(0, cpus)
+    if cpus:
+        os.sched_setaffinity(0, cpus)
     folder = args.output / 'datasets' / ds['dataset']
     folder.mkdir(parents=True, exist_ok=False)
 
@@ -120,7 +123,8 @@ def dataset_run(args, config, ds):
         method, ef = job
         if method == 'vanilla' and args.backend == 'hnswlib':
             index.set_ef(ef)
-        os.sched_setaffinity(0, [cpus[0]] if args.backend == 'faiss' else cpus)
+        if cpus:
+            os.sched_setaffinity(0, [cpus[0]] if args.backend == 'faiss' else cpus)
         try:
             begin = time.perf_counter()
             if method != 'vanilla':
@@ -133,7 +137,8 @@ def dataset_run(args, config, ds):
                 result = index.knn_query(vectors, k=k, num_threads=threads)
             seconds = time.perf_counter() - begin
         finally:
-            os.sched_setaffinity(0, cpus)
+            if cpus:
+                os.sched_setaffinity(0, cpus)
         return result, seconds
 
     stage('warmup', settings=len(jobs))
@@ -199,6 +204,7 @@ def dataset_run(args, config, ds):
 
 
 def run(args, config, datasets):
+    validate_timing_config(config)
     frozen = fingerprint(args, datasets)
     if args.dataset:
         require(read(args.output / 'manifest.json')['signature'] == frozen, 'Inputs or source changed')
@@ -207,8 +213,6 @@ def run(args, config, datasets):
         require(fingerprint(args, datasets) == frozen, 'Inputs or source changed during measurement')
         return
     require(not args.output.exists(), f'Use an unused output directory: {args.output}')
-    require(len(config['timing']['cpus']) == config['online_threads'] == config['offline_threads'],
-            'This protocol uses the same cores for offline and online')
     for ds in datasets:
         expected = ds[args.backend + '_index']
         require(identity(expected['path']) == dict(expected, path=str(Path(expected['path']).resolve())),
@@ -231,10 +235,7 @@ def run(args, config, datasets):
                 argv = [sys.executable, str(Path(__file__).resolve()), '--backend', args.backend,
                     '--k', str(args.k), '--config', str(args.config), '--datasets-config', str(args.datasets_config),
                     '--output', str(args.output), '--dataset', name]
-                node = config['timing']['numa_node']
-                if node is not None:
-                    argv = ['numactl', '--physcpubind=' + ','.join(map(str, config['timing']['cpus'])),
-                            f'--membind={node}', *argv]
+                argv = with_numa_binding(argv, config)
                 with (args.output / 'logs' / f'{name}.log').open('w') as log:
                     subprocess.run(argv, env=environment(config), stdout=log, stderr=subprocess.STDOUT, check=True)
                 folder = args.output / 'datasets' / name

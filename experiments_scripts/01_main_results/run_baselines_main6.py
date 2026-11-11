@@ -14,7 +14,8 @@ import sys
 import time
 
 from tune_baselines import ef_grid, same_result, tune_abs, tune_pip
-from main6_common import RUN_ROOT, effective_config, resolve_datasets, hits_per_query
+from main6_common import (RUN_ROOT, effective_config, resolve_datasets, hits_per_query,
+                         validate_timing_config, with_numa_binding)
 
 ROOT = Path(__file__).resolve().parent
 SAGE_ROOT = ROOT.parents[1]
@@ -125,9 +126,14 @@ def environment(config):
                 'ABS_BUILD_DIR', 'ABS_FAISS_PYTHON_PATH', 'LD_PRELOAD'):
         env.pop(key, None)
     env.update(OMP_NUM_THREADS=str(config['online_threads']), OMP_DYNAMIC='FALSE',
-               OMP_PROC_BIND='close', OMP_PLACES=','.join('{%d}' % c for c in config['timing']['cpus']),
                OMP_WAIT_POLICY='PASSIVE', KMP_BLOCKTIME='0', OPENBLAS_NUM_THREADS='1',
                MKL_NUM_THREADS='1', NUMEXPR_NUM_THREADS='1', FAISS_OPT_LEVEL='AVX512')
+    cpus = config['timing'].get('cpus')
+    env['OMP_PROC_BIND'] = 'close' if cpus else 'FALSE'
+    if cpus:
+        env['OMP_PLACES'] = ','.join('{%d}' % cpu for cpu in cpus)
+    else:
+        env.pop('OMP_PLACES', None)
     return env
 
 
@@ -137,22 +143,25 @@ class Experiment:
         import numpy as np
         self.np, self.config, self.ds, self.target = np, config, ds, target
         self.method, self.k = args.method, config['k']
-        self.cpus = config['timing']['cpus']
-        os.sched_setaffinity(0, self.cpus)
+        self.cpus = config['timing'].get('cpus')
+        if self.cpus:
+            os.sched_setaffinity(0, self.cpus)
         sys.path.insert(0, str(PACKAGES[self.method]))
         import faiss
         require(Path(faiss.__file__).resolve().parent == PACKAGES[self.method] / 'faiss', 'Wrong FAISS package')
         self.faiss = faiss
-        # Initialize both OpenMP runtimes against the full CPU mask, before any search.
+        # When binding, initialize both OpenMP runtimes against the full CPU mask.
         if self.method == 'abs':
-            os.sched_setaffinity(0, self.cpus)
+            if self.cpus:
+                os.sched_setaffinity(0, self.cpus)
             ctypes.CDLL(str(SAGE_ROOT / 'baselines/abs/build/libpaper_abs.so'))
-        for library in sorted({line.split()[-1] for line in Path('/proc/self/maps').read_text().splitlines()
-                               if any(token in line for token in ('libgomp', 'libiomp', 'libomp'))}):
+        if self.cpus:
+            for library in sorted({line.split()[-1] for line in Path('/proc/self/maps').read_text().splitlines()
+                                   if any(token in line for token in ('libgomp', 'libiomp', 'libomp'))}):
+                os.sched_setaffinity(0, self.cpus)
+                runtime = ctypes.CDLL(library)
+                require(runtime.omp_get_num_places() == len(self.cpus), f'Wrong OpenMP placement: {library}')
             os.sched_setaffinity(0, self.cpus)
-            runtime = ctypes.CDLL(library)
-            require(runtime.omp_get_num_places() == len(self.cpus), f'Wrong OpenMP placement: {library}')
-        os.sched_setaffinity(0, self.cpus)
         faiss.omp_set_num_threads(config['online_threads'])
         faiss.InterruptCallback.clear_instance()
         self.index = faiss.read_index(ds['faiss_index']['path'])
@@ -183,7 +192,8 @@ class Experiment:
         if self.method == 'abs':
             sys.path.insert(0, str(SAGE_ROOT / 'baselines/abs/scripts'))
             from unit_or_zero_runtime import UnitOrZeroIPABSSearch
-            os.sched_setaffinity(0, self.cpus)
+            if self.cpus:
+                os.sched_setaffinity(0, self.cpus)
             self.abs = UnitOrZeroIPABSSearch(self.index, threads=config['online_threads'],
                                            unit_normalized=ds['space'] == 'cosine')
         self.parameters = {}
@@ -208,7 +218,8 @@ class Experiment:
                 p.saturation_threshold = settings['threshold']
             self.parameters[key] = p
         faiss.cvar.hnsw_stats.reset()
-        os.sched_setaffinity(0, {self.cpus[0]})
+        if self.cpus:
+            os.sched_setaffinity(0, {self.cpus[0]})
         try:
             # Whole batch API scope: query preparation and output allocation included.
             start = time.perf_counter()
@@ -222,7 +233,8 @@ class Experiment:
                 distances, labels = self.index.search(queries, self.k, params=self.parameters[key])
             seconds = time.perf_counter() - start
         finally:
-            os.sched_setaffinity(0, self.cpus)
+            if self.cpus:
+                os.sched_setaffinity(0, self.cpus)
         self.labels, self.distances = labels, distances
         ndis = int(counters['ndis'].sum()) - len(queries) if method == 'abs' else int(faiss.cvar.hnsw_stats.ndis)
         return dict(method=method, config=settings, seconds=seconds, hits=self.hits(labels), ndis=ndis,
@@ -230,8 +242,9 @@ class Experiment:
 
     def placement(self):
         masks = [sorted(os.sched_getaffinity(int(p.name))) for p in Path('/proc/self/task').iterdir()]
-        require(all(set(mask).issubset(self.cpus) for mask in masks), 'Threads escaped requested CPU mask')
-        require(set(self.cpus[1:]).issubset({m[0] for m in masks if len(m) == 1}), 'Workers not pinned separately')
+        if self.cpus:
+            require(all(set(mask).issubset(self.cpus) for mask in masks), 'Threads escaped requested CPU mask')
+            require(set(self.cpus[1:]).issubset({m[0] for m in masks if len(m) == 1}), 'Workers not pinned separately')
         return dict(thread_masks=masks, numa_maps=Path('/proc/self/numa_maps').read_text())
 
     def close(self):
@@ -302,7 +315,7 @@ def phase(args, config, ds, target):
 
 
 def run(args, config, datasets, targets):
-    require(len(config['timing']['cpus']) == config['online_threads'], 'CPU count differs from thread count')
+    validate_timing_config(config)
     require(config['timing']['include_query_preprocessing'] and config['timing']['include_output_allocation'],
             'This runner measures whole batch API time including preprocessing and allocation')
     frozen = signature(args, datasets)
@@ -333,10 +346,7 @@ def run(args, config, datasets, targets):
                             '--config', str(args.config), '--datasets-config', str(args.datasets_config),
                             '--output', str(args.output), '--targets', str(args.targets),
                             '--phase', stage, '--dataset', name, '--k', str(config['k'])]
-                    node = config['timing']['numa_node']
-                    if node is not None:
-                        argv = ['numactl', '--physcpubind=' + ','.join(map(str, config['timing']['cpus'])),
-                                f'--membind={node}', *argv]
+                    argv = with_numa_binding(argv, config)
                     with (args.output / 'logs' / f'{name}_{stage}.log').open('w') as log:
                         subprocess.run(argv, env=environment(config), stdout=log, stderr=subprocess.STDOUT, check=True)
                 for filename, rows in [('summary.csv', summaries), ('raw_timings.csv', timings)]:

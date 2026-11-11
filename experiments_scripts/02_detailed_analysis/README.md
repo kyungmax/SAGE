@@ -21,8 +21,7 @@ common=(
 bash scripts/python.sh "$detail/run_drilldown.py" "${common[@]}" --preflight
 ```
 
-Use fresh output directories. For timing, use the main run's CPU/NUMA placement;
-`--cpus` accepts a comma-separated CPU list.
+Use fresh output directories and keep timing jobs sequential.
 
 ## 2. Prepare baseline counters (optional)
 

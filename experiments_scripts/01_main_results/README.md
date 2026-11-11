@@ -5,7 +5,8 @@ Run from the repository root after the [build and data setup](../../README.md).
 ## 1. Configure inputs and timing
 
 Set the paths in [datasets.json](config/main6_online24/datasets.json) and the
-CPU/NUMA settings in [experiment.json](config/main6_online24/experiment.json).
+thread counts in [experiment.json](config/main6_online24/experiment.json).
+CPU/NUMA binding is disabled by default.
 For copies, pass `--config` and `--datasets-config` to each `run.sh` command.
 Use a fresh `--output` directory for another run; the examples use default paths.
 If you change it, update the later `--targets` and `--input` paths to match.
@@ -27,8 +28,7 @@ FAISS must finish before PiP/ABS because it produces `faiss/targets.json`.
 
 Build their [optional runtimes](../../README.md#build) first. After step 2,
 run these commands per dataset. Pass the same catalog with `--catalog` if using
-a copy, set `--threads`, and wrap each command with
-`numactl --physcpubind=CPU_LIST --membind=NODE` matching step 1.
+a copy, and set `--threads` to match step 1.
 Add `--preflight` to check inputs before execution.
 
 ```bash

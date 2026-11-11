@@ -12,7 +12,7 @@ import statistics
 import sys
 import time
 
-from main6_common import SAGE_ROOT, hits_per_query
+from main6_common import SAGE_ROOT, hits_per_query, validate_timing_config
 from run_baselines_main6 import (read, save, sha, array_sha, identity, csvwrite,
                                  require, SAGE_BINARY)
 
@@ -33,8 +33,9 @@ def signature(args, ds):
 def load_index(args, config, ds):
     import h5py
     import numpy as np
-    cpus = config['timing']['cpus']
-    os.sched_setaffinity(0, cpus)
+    cpus = config['timing'].get('cpus')
+    if cpus:
+        os.sched_setaffinity(0, cpus)
     sys.path.insert(0, str(SAGE_ROOT))
     if args.backend == 'faiss':
         sys.path.insert(0, str(SAGE_BINARY.parents[1]))
@@ -96,8 +97,7 @@ def run(args, config, ds):
             'Approved run requires the current 500-probe calibration')
     require(config['k'] == 10 and config['timed_repeats'] >= 2 and
             config['warmups_per_setting'] >= 0, 'Expected k10, at least two measured runs and nonnegative warmups')
-    require(len(config['timing']['cpus']) == config['online_threads'] == config['offline_threads'],
-            'Same assigned cores required for offline and online work')
+    validate_timing_config(config)
     initial_signature = signature(args, ds)
     frozen = None
     if args.backend == 'faiss' and args.stage == 'online':
@@ -166,7 +166,7 @@ def run(args, config, ds):
         with h5py.File(ds['dataset_path']) as stream:
             vectors = np.asarray(stream['test'], dtype=np.float32, order='C')
             truth = np.asarray(stream['neighbors'][:, :10], dtype=np.int64, order='C')
-        n, threads, cpus = len(vectors), config['online_threads'], config['timing']['cpus']
+        n, threads, cpus = len(vectors), config['online_threads'], config['timing'].get('cpus')
         require(vectors.shape == (ds['query_count'], ds['dimension']) and truth.shape == (n, 10),
                 'Query or ground-truth shape changed')
         require(np.isfinite(vectors).all() and ((truth >= 0) & (truth < ds['train_count'])).all(),
@@ -189,7 +189,8 @@ def run(args, config, ds):
             method, ef = job
             if method == 'vanilla' and args.backend == 'hnswlib':
                 index.set_ef(ef)
-            os.sched_setaffinity(0, [cpus[0]] if args.backend == 'faiss' else cpus)
+            if cpus:
+                os.sched_setaffinity(0, [cpus[0]] if args.backend == 'faiss' else cpus)
             try:
                 begin = time.perf_counter()
                 if method != 'vanilla':
@@ -202,7 +203,8 @@ def run(args, config, ds):
                     result = index.knn_query(vectors, k=10, num_threads=threads)
                 seconds = time.perf_counter() - begin
             finally:
-                os.sched_setaffinity(0, cpus)
+                if cpus:
+                    os.sched_setaffinity(0, cpus)
             return result, seconds
 
         def timed_call(job, repeat, position, phase):

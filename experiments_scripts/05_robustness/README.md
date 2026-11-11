@@ -17,8 +17,9 @@ bash scripts/build.sh rabitq
 ```
 
 Paths use `SAGE_DATA_DIR` / `SAGE_INDEX_DIR`, or absolute `dataset_path` / index
-`path` entries. Edit CPU/NUMA placement and matching thread counts in
-[experiment.json](config/experiment.json). Both studies calibrate independently.
+`path` entries. Set offline/online thread counts in
+[experiment.json](config/experiment.json). CPU/NUMA binding is disabled by default.
+Both studies calibrate independently.
 
 ## 2. Check and run each study
 
@@ -36,8 +37,8 @@ bash scripts/python.sh experiments_scripts/05_robustness/run.py rabitq \
 ```
 
 For copied inputs, pass `--config` and `--catalog` to both checks and runs.
-Use `--datasets NAME1,NAME2` for a subset; `--cpus` and `--numa-node` override
-placement (`--cpus` also sets both thread counts).
+Use `--datasets NAME1,NAME2` for a subset. Optional `--cpus` enables CPU binding
+and sets both thread counts; `--numa-node` adds NUMA binding and requires `numactl`.
 
 ## 3. Generate reports
 
